@@ -20,13 +20,17 @@ mod util;
 mod workspace;
 
 #[cfg(feature = "extrinsics")]
-use sp_core::{crypto::Pair, sr25519, H256};
+use sp_core::{
+    crypto::{AccountId32, Pair},
+    sr25519, H256,
+};
+
 use std::{
     convert::{TryFrom, TryInto},
     path::PathBuf,
 };
 #[cfg(feature = "extrinsics")]
-use subxt::PairSigner;
+use subxt::{system::System, ContractsTemplateRuntime, PairSigner};
 
 use anyhow::{Error, Result};
 use colored::Colorize;
@@ -83,7 +87,7 @@ pub(crate) struct ExtrinsicOpts {
 
 #[cfg(feature = "extrinsics")]
 impl ExtrinsicOpts {
-    pub fn signer(&self) -> Result<PairSigner<subxt::DefaultNodeRuntime, sr25519::Pair>> {
+    pub fn signer(&self) -> Result<PairSigner<subxt::ContractsTemplateRuntime, sr25519::Pair>> {
         let pair =
             sr25519::Pair::from_string(&self.suri, self.password.as_ref().map(String::as_ref))
                 .map_err(|_| anyhow::anyhow!("Secret string error"))?;
@@ -208,6 +212,34 @@ enum Command {
         #[structopt(long)]
         data: HexData,
     },
+    /// Call for smart contract execution on Runtime Gateway
+    #[cfg(feature = "extrinsics")]
+    #[structopt(name = "call-runtime-gateway")]
+    CallRuntimeGateway {
+        #[structopt(flatten)]
+        extrinsic_opts: ExtrinsicOpts,
+        /// Target chain destination
+        #[structopt(name = "target", long, short)]
+        target: String,
+        /// Target chain destination
+        #[structopt(name = "requester", long, short)]
+        requester: String,
+        /// Execution Phase
+        #[structopt(name = "phase", long, default_value = "0")]
+        phase: u8,
+        /// Value of balance transfer optionally attached to the execution order
+        #[structopt(name = "value", long, default_value = "0")]
+        value: u128,
+        /// Maximum amount of gas to be used for this command
+        #[structopt(name = "gas", long, default_value = "500000000")]
+        gas_limit: u64,
+        /// Path to wasm contract code, defaults to ./target/<name>-pruned.wasm
+        #[structopt(parse(from_os_str))]
+        wasm_path: Option<PathBuf>,
+        /// Hex encoded data to call a contract constructor
+        #[structopt(long, default_value = "00")]
+        data: HexData,
+    },
 }
 
 #[cfg(feature = "extrinsics")]
@@ -292,6 +324,38 @@ fn exec(cmd: Command) -> Result<String> {
                 data.clone(),
             )?;
             Ok(format!("Contract account: {:?}", contract_account))
+        }
+        #[cfg(feature = "extrinsics")]
+        Command::CallRuntimeGateway {
+            extrinsic_opts,
+            target,
+            requester,
+            wasm_path,
+            phase,
+            value,
+            gas_limit,
+            data,
+        } => {
+            let code = cmd::deploy::load_contract_code(wasm_path.as_ref())?;
+
+            let pair_target = sr25519::Pair::from_string(target, None)
+                .map_err(|_| anyhow::anyhow!("Target account read string error"))?;
+
+            let pair_requester = sr25519::Pair::from_string(requester, None)
+                .map_err(|_| anyhow::anyhow!("Requester account read string error"))?;
+
+            let res = cmd::execute_call(
+                extrinsic_opts,
+                AccountId32::from(pair_requester.public()),
+                AccountId32::from(pair_target.public()),
+                *phase,
+                &code,
+                *value,
+                *gas_limit,
+                data.clone(),
+            )?;
+
+            Ok(format!("CallRuntimeGateway result: {:?}", res))
         }
     }
 }

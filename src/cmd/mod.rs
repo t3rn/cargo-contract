@@ -16,11 +16,15 @@
 
 pub mod build;
 #[cfg(feature = "extrinsics")]
-mod deploy;
+mod call;
+#[cfg(feature = "extrinsics")]
+pub mod deploy;
 #[cfg(feature = "extrinsics")]
 mod instantiate;
 pub mod metadata;
 pub mod new;
 
 #[cfg(feature = "extrinsics")]
-pub(crate) use self::{deploy::execute_deploy, instantiate::execute_instantiate};
+pub(crate) use self::{
+    call::execute_call, deploy::execute_deploy, instantiate::execute_instantiate,
+};

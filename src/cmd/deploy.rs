@@ -25,7 +25,7 @@ use crate::{crate_metadata, ExtrinsicOpts};
 /// Load the wasm blob from the specified path.
 ///
 /// Defaults to the target contract wasm in the current project, inferred via the crate metadata.
-fn load_contract_code(path: Option<&PathBuf>) -> Result<Vec<u8>> {
+pub fn load_contract_code(path: Option<&PathBuf>) -> Result<Vec<u8>> {
     let contract_wasm_path = match path {
         Some(path) => path.clone(),
         None => {
