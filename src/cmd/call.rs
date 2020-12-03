@@ -16,29 +16,14 @@
 
 use anyhow::Result;
 use subxt::{
-    balances::Balances, contracts::*, runtime_gateway::*, system::System, ClientBuilder,
-    ContractsTemplateRuntime,
+    balances::Balances, contracts::*, contracts_gateway::*, runtime_gateway::*, system::System,
+    ClientBuilder, ContractsTemplateRuntime,
 };
 // use self::{deploy::load_contract_code};
 use crate::cmd::deploy::load_contract_code;
 
 use crate::{ExtrinsicOpts, HexData};
 
-// pub requester: <T as System>::AccountId,
-// /// Address of the target destination (of attached value transfer as the contract calls aren't possible on runtime gateway).
-// pub target_dest: <T as System>::AccountId,
-// /// Current phase of multistep execution.
-// pub phase: u8,
-// /// Wasm blob.
-// pub code: &'a [u8],
-// /// Value to transfer to the target_dest.
-// #[codec(compact)]
-// pub value: <T as Balances>::Balance,
-// /// Gas limit.
-// #[codec(compact)]
-// pub gas_limit: Gas,
-// /// Data to initialize the contract with.
-// pub data: &'a [u8],
 /// Instantiate a contract stored at the supplied code hash.
 /// Returns the account id of the instantiated contract if successful.
 ///
@@ -63,10 +48,6 @@ pub(crate) fn execute_call<'a>(
 
         let signer = extrinsic_opts.signer()?;
 
-        // let events = cli
-        //     .multistep_call_and_watch(&signer, endowment, gas_limit, &code_hash, &data.0)
-        //     .await?;
-
         let events = cli
             .multistep_call_and_watch(
                 &signer,
@@ -87,12 +68,68 @@ pub(crate) fn execute_call<'a>(
                     "Failed to find a MultistepExecutePhaseSuccess event"
                 ))?;
 
-        //  /Users/macio/projects/substrate.dev/cargo-contract/target/debug/cargo-contract contract call-runtime-gateway --data 00 --suri //Alice
+        //  /Users/macio/projects/substrate.dev/cargo-contract/target/debug/cargo-contract contract call-runtime-gateway --data 00 --suri //Alice --target //Bob --requester //Charlie
 
-        // log::info!(
-        //     "MultistepExecutePhaseSuccess execution_stamp: {:?}",
-        //     execution_success_event.execution_stamp
-        // );
+        let instantiated = events
+            .instantiated()?
+            .ok_or(anyhow::anyhow!("Failed to find Instantiated event"))?;
+
+
+        log::info!(
+            "multistep_call_and_watch execution_success_event execution_stamp {:?}",
+            execution_success_event.execution_stamp
+        );
+
+
+        Ok(())
+    })
+}
+
+/// Instantiate a contract stored at the supplied code hash.
+/// Returns the account id of the instantiated contract if successful.
+///
+/// Creates an extrinsic with the `Contracts::instantiate` Call, submits via RPC, then waits for
+/// the `ContractsEvent::Instantiated` event.
+pub(crate) fn execute_contract_call<'a>(
+    extrinsic_opts: &ExtrinsicOpts,
+    requester: <ContractsTemplateRuntime as System>::AccountId,
+    target_dest: <ContractsTemplateRuntime as System>::AccountId,
+    phase: u8,
+    code: &'a [u8],
+    value: <ContractsTemplateRuntime as Balances>::Balance,
+    gas_limit: u64,
+    data: HexData,
+    // ) -> Result<&'a [u8]> {
+) -> Result<()> {
+    async_std::task::block_on(async move {
+        let cli = ClientBuilder::<ContractsTemplateRuntime>::new()
+            .set_url(&extrinsic_opts.url.to_string())
+            .build()
+            .await?;
+
+        let signer = extrinsic_opts.signer()?;
+
+        let events = cli
+            .gateway_contract_exec_and_watch(
+                &signer,
+                requester,
+                target_dest,
+                phase, // phase = Execution
+                &code,
+                value,     // value
+                gas_limit, // gas_limit
+                &data.0,   // input data
+            )
+            .await?;
+        log::info!("multistep_call_and_watch res: {:?}", events);
+        let execution_success_event =
+            events
+                .multistep_execute_phase_success()?
+                .ok_or(anyhow::anyhow!(
+                    "Failed to find a MultistepExecutePhaseSuccess event"
+                ))?;
+
+        //  /Users/macio/projects/substrate.dev/cargo-contract/target/debug/cargo-contract contract call-runtime-gateway --data 00 --suri //Alice --target //Bob --requester //Charlie
 
         let instantiated = events
             .instantiated()?
@@ -158,12 +195,3 @@ mod tests {
         })
     }
 }
-
-// &self.signer,
-// requester,
-// target_dest,
-// phase, // phase = Execution
-// &code,
-// value, // value
-// gas,   // gas_limit
-// &[],   // input data

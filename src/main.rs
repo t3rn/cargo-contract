@@ -172,6 +172,14 @@ enum Command {
         #[structopt(flatten)]
         unstable_options: UnstableOptions,
     },
+    /// Compiles all of the composable smart contracts described in the schedule
+    #[structopt(name = "composable-build")]
+    ComposableBuild {
+        #[structopt(flatten)]
+        verbosity: VerbosityFlags,
+        #[structopt(flatten)]
+        unstable_options: UnstableOptions,
+    },
     /// Generate contract metadata artifacts
     #[structopt(name = "generate-metadata")]
     GenerateMetadata {
@@ -282,6 +290,21 @@ fn exec(cmd: Command) -> Result<String> {
             )?;
             Ok(format!(
                 "\nYour contract is ready. You can find it here:\n{}",
+                dest_wasm.display().to_string().bold()
+            ))
+        }
+        Command::ComposableBuild {
+            verbosity,
+            unstable_options,
+        } => {
+            let manifest_path = Default::default();
+            let dest_wasm = cmd::composable_build::execute(
+                &manifest_path,
+                verbosity.try_into()?,
+                unstable_options.try_into()?,
+            )?;
+            Ok(format!(
+                "\nYour composable contract(s) is/are ready. You can find it the following directory:\n{}",
                 dest_wasm.display().to_string().bold()
             ))
         }

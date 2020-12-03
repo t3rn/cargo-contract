@@ -17,6 +17,7 @@
 pub mod build;
 #[cfg(feature = "extrinsics")]
 mod call;
+pub mod composable_build;
 #[cfg(feature = "extrinsics")]
 pub mod deploy;
 #[cfg(feature = "extrinsics")]

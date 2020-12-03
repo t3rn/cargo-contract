@@ -17,11 +17,17 @@
 use crate::workspace::ManifestPath;
 use anyhow::{Context, Result};
 use cargo_metadata::{Metadata as CargoMetadata, MetadataCommand, Package};
+use colored::Colorize;
 use semver::Version;
+use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::{fs, path::PathBuf};
 use toml::value;
 use url::Url;
+#[derive(Debug, Deserialize)]
+pub struct ComposableScheduleMetadata {
+    pub composables: Vec<String>,
+}
 
 /// Relevant metadata obtained from Cargo.toml.
 #[derive(Debug)]
@@ -29,8 +35,10 @@ pub struct CrateMetadata {
     pub manifest_path: ManifestPath,
     pub cargo_meta: cargo_metadata::Metadata,
     pub package_name: String,
+    pub t3rn_composable_schedule: ComposableScheduleMetadata,
     pub root_package: Package,
     pub original_wasm: PathBuf,
+    pub target_directory: PathBuf,
     pub dest_wasm: PathBuf,
     pub ink_version: Version,
     pub documentation: Option<Url>,
@@ -58,10 +66,22 @@ impl CrateMetadata {
         dest_wasm.push(package_name.clone());
         dest_wasm.set_extension("wasm");
 
+        let mut composable_schedule: ComposableScheduleMetadata = ComposableScheduleMetadata {
+            composables: vec![],
+        };
+
         let ink_version = metadata
             .packages
             .iter()
             .find_map(|package| {
+                if package.name == "flipper" {
+                    composable_schedule = serde_json::from_value(package.metadata.clone()).unwrap();
+                    println!(
+                        "{} {:?}",
+                        "Detected following t3rn schedule".bright_blue().bold(),
+                        composable_schedule
+                    );
+                }
                 if package.name == "ink_lang" {
                     Some(
                         Version::parse(&package.version.to_string())
@@ -77,7 +97,7 @@ impl CrateMetadata {
 
         let crate_metadata = CrateMetadata {
             manifest_path: manifest_path.clone(),
-            cargo_meta: metadata,
+            cargo_meta: metadata.clone(),
             root_package,
             package_name,
             original_wasm,
@@ -86,6 +106,8 @@ impl CrateMetadata {
             documentation,
             homepage,
             user,
+            t3rn_composable_schedule: composable_schedule,
+            target_directory: metadata.target_directory.clone(),
         };
         Ok(crate_metadata)
     }
