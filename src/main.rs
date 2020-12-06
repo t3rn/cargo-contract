@@ -36,6 +36,8 @@ use anyhow::{Error, Result};
 use colored::Colorize;
 use structopt::{clap, StructOpt};
 
+use crate::crate_metadata::CrateMetadata;
+
 #[derive(Debug, StructOpt)]
 #[structopt(bin_name = "cargo")]
 pub(crate) enum Opts {
@@ -201,6 +203,14 @@ enum Command {
         #[structopt(parse(from_os_str))]
         wasm_path: Option<PathBuf>,
     },
+    /// Upload all smart contracts selected in composable schedule to appointed by urls chains.
+    #[cfg(feature = "extrinsics")]
+    #[structopt(name = "composable-deploy")]
+    ComposableDeploy {
+        /// Secret key URI for the account deploying the contract.
+        #[structopt(name = "suri", long, short)]
+        suri: String,
+    },
     /// Instantiate a deployed smart contract
     #[cfg(feature = "extrinsics")]
     #[structopt(name = "instantiate")]
@@ -330,6 +340,39 @@ fn exec(cmd: Command) -> Result<String> {
         } => {
             let code_hash = cmd::execute_deploy(extrinsic_opts, wasm_path.as_ref())?;
             Ok(format!("Code hash: {:?}", code_hash))
+        }
+        #[cfg(feature = "extrinsics")]
+        Command::ComposableDeploy { suri } => {
+            let manifest_path = Default::default();
+            let crate_metadata = CrateMetadata::collect(&manifest_path)?;
+            println!(
+                "{}",
+                "Deploy composable components to appointed urls".bright_blue().bold(),
+            );
+            let composable_schedule = crate_metadata.clone().t3rn_composable_schedule
+                .expect("Failed to read composable metadata from JSON using serde. Make sure your Cargo.toml follows the composable metadata format");
+            match composable_schedule.deploy {
+                Some(deploy_schedule) => {
+                    for deploy in deploy_schedule {
+                       println!("Deploying: {:?}", deploy);
+                        let component_extrinsic_opts = ExtrinsicOpts {
+                            url: url::Url::parse(&deploy.url)?,
+                            suri: suri.to_string(),
+                            password: None
+                        };
+                        let dest_wasm_path = cmd::composable_build::get_dest_wasm_path(deploy.compose, &crate_metadata.clone());
+                        let code_hash = cmd::execute_deploy(&component_extrinsic_opts, Some(&dest_wasm_path))?;
+                        println!(
+                            "{} - {} {:?}",
+                            crate_metadata.package_name.bright_blue().bold(),
+                            "successfully deployed byte code with hash: ".bright_blue(),
+                            code_hash
+                        );
+                    }
+                    Ok(format!("All components successfully deployed for {:?}", suri))
+                },
+                None => Err(anyhow::anyhow!("Nothing to deploy. Empty deploy key of composable metadata.")),
+            }
         }
         #[cfg(feature = "extrinsics")]
         Command::Instantiate {

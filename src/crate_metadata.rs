@@ -24,18 +24,36 @@ use serde_json::{Map, Value};
 use std::{fs, path::PathBuf};
 use toml::value;
 use url::Url;
-#[derive(Debug, Deserialize)]
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ComposableDeployConfig {
+    pub compose: String,
+    pub vm: String,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ComposableExecConfig {
+    pub compose: String,
+    pub gateway: String,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct ComposableScheduleMetadata {
     pub composables: Vec<String>,
+    pub schedule: Option<String>,
+    pub deploy: Option<Vec<ComposableDeployConfig>>,
+    pub exec: Option<Vec<ComposableExecConfig>>,
 }
 
 /// Relevant metadata obtained from Cargo.toml.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CrateMetadata {
     pub manifest_path: ManifestPath,
     pub cargo_meta: cargo_metadata::Metadata,
     pub package_name: String,
-    pub t3rn_composable_schedule: ComposableScheduleMetadata,
+    pub t3rn_composable_schedule: Option<ComposableScheduleMetadata>,
     pub root_package: Package,
     pub original_wasm: PathBuf,
     pub target_directory: PathBuf,
@@ -54,6 +72,8 @@ impl CrateMetadata {
         // Normalize the package name.
         let package_name = root_package.name.replace("-", "_");
 
+
+
         // {target_dir}/wasm32-unknown-unknown/release/{package_name}.wasm
         let mut original_wasm = metadata.target_directory.clone();
         original_wasm.push("wasm32-unknown-unknown");
@@ -66,16 +86,18 @@ impl CrateMetadata {
         dest_wasm.push(package_name.clone());
         dest_wasm.set_extension("wasm");
 
-        let mut composable_schedule: ComposableScheduleMetadata = ComposableScheduleMetadata {
-            composables: vec![],
-        };
+        let mut composable_schedule: Option<ComposableScheduleMetadata> = None;
 
         let ink_version = metadata
             .packages
             .iter()
             .find_map(|package| {
-                if package.name == "flipper" {
-                    composable_schedule = serde_json::from_value(package.metadata.clone()).unwrap();
+                // Extract the composable metadata which should be place in the Cargo.toml of package_name.
+                if package.name == package_name.clone() {
+                    composable_schedule = match serde_json::from_value(package.metadata.clone()) {
+                        Ok(composable_schedule) => Some(composable_schedule),
+                        Err(composable_schedule) => None,
+                    };
                     println!(
                         "{} {:?}",
                         "Detected following t3rn schedule".bright_blue().bold(),

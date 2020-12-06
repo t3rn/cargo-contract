@@ -37,13 +37,13 @@ const MAX_MEMORY_PAGES: u32 = 16;
 // &format!("--target-dir={}", target_dir.to_string_lossy() + "/" + current_compose_name),
 /// Constructs a target destination path for a current compose.
 /// This is simply creating additional folder with a compose name in a target directory.
-fn get_compose_target_dest(compose: String, mut target_dir: PathBuf) -> PathBuf {
+pub fn get_compose_target_dest(compose: String, mut target_dir: PathBuf) -> PathBuf {
     target_dir.push(compose);
     target_dir
 }
 
 /// Constructs a path to the original (before optimisations) WASM file
-fn get_original_wasm_path(compose: String, crate_metadata: &CrateMetadata) -> PathBuf {
+pub fn get_original_wasm_path(compose: String, crate_metadata: &CrateMetadata) -> PathBuf {
     let mut original_wasm =
         get_compose_target_dest(compose, crate_metadata.target_directory.clone()).clone();
     // let mut original_wasm = metadata.target_directory.clone();
@@ -55,7 +55,7 @@ fn get_original_wasm_path(compose: String, crate_metadata: &CrateMetadata) -> Pa
 }
 
 /// Constructs a path to the destination (after optimisations) WASM file
-fn get_dest_wasm_path(compose: String, crate_metadata: &CrateMetadata) -> PathBuf {
+pub fn get_dest_wasm_path(compose: String, crate_metadata: &CrateMetadata) -> PathBuf {
     let mut dest_wasm =
         get_compose_target_dest(compose, crate_metadata.target_directory.clone()).clone();
     // let mut dest_wasm = metadata.target_directory.clone();
@@ -289,10 +289,14 @@ pub(crate) fn execute(
     unstable_options: UnstableFlags,
 ) -> Result<PathBuf> {
     let crate_metadata = CrateMetadata::collect(manifest_path)?;
+
+    let composable_schedule = crate_metadata.clone().t3rn_composable_schedule
+        .expect("Failed to read composable metadata from JSON using serde. Make sure your Cargo.toml follows the composable metadata format");
+
     let mut compose_dest_path = Err(anyhow::anyhow!(
         "Empty composable t3rn contracts schedule. Didn't compile anything."
     ));
-    for compose in crate_metadata.t3rn_composable_schedule.composables.clone() {
+    for compose in composable_schedule.composables.clone() {
         compose_dest_path = execute_with_metadata_composable(
             &crate_metadata,
             compose,
@@ -304,7 +308,6 @@ pub(crate) fn execute(
         Ok(_) => Ok(crate_metadata.target_directory),
         Err(err) => Err(err),
     }
-    // compose_dest_path
 }
 /// Executes build of the smart-contract which produces a wasm binary that is ready for deploying.
 ///
