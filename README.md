@@ -1,10 +1,12 @@
-# Cargo plugin for [`ink!`](https://github.com/paritytech/ink) contracts
+# Cargo plugin for t3rn composable contracts
 
 [![GitHub license](https://img.shields.io/github/license/paritytech/cargo-contract)](LICENSE) 
 [![GitLab Status](https://gitlab.parity.io/parity/cargo-contract/badges/master/pipeline.svg)](https://gitlab.parity.io/parity/cargo-contract/pipelines)
 [![Latest Version](https://img.shields.io/crates/v/cargo-contract.svg)](https://crates.io/crates/cargo-contract)
 
-A CLI tool for helping setting up and managing WebAssembly smart contracts written with ink!.
+A CLI tool for helping setting up and managing WebAssembly smart contracts in !ink, Solidity (_not yet! WIP._) and WebAssembly text format. Supports t3rn composable contracts.
+ 
+**This is a fork of [`cargo-contracts`](https://github.com/paritytech/cargo-contracts). The fork extends the smart contract languages with Solidity and WASM text format. It also adds the features of composable contract builds, deployment and execution via t3rn gateways.**
 
 ## Installation
 
@@ -12,18 +14,19 @@ A CLI tool for helping setting up and managing WebAssembly smart contracts writt
 
   - **rust-src**: `rustup component add rust-src`
   - **wasm-opt**: https://github.com/WebAssembly/binaryen#tools
-   
-`cargo install --git https://github.com/MaciejBaj/cargo-contract cargo-t3rn-contract --features extrinsics --force`
+
 - **Install from source**
- - `cargo build cargo-contract`
-  - `cargo install cargo-contract`
-- **[Not yet, WIP] Install latest version from [crates.io](https://crates.io/crates/cargo-contract)**
-  - `cargo install cargo-contract`
+    - `cargo build --features extrinsics`
+- **Install from remote repo**
+  - `cargo install --git https://github.com/MaciejBaj/cargo-contract cargo-t3rn-contract --features extrinsics --force`
+
+**You can now use the compiler as a command line tool: `cargo t3rn-contract`**
+
 
 ## Usage
 
 ```
-cargo-contract 0.3.0
+cargo-t3rn-contract 0.3.0
 Utilities to develop Wasm smart contracts.
 
 USAGE:
@@ -68,6 +71,6 @@ Once they are stable and the compilation time is acceptable, we will consider re
 
 ## License
 
-The entire code within this repository is licensed under the [GPLv3](LICENSE). Please [contact us](https://www.parity.io/contact/) if you have questions about the licensing of our products.
+The entire code within this repository is licensed under the [GPLv3](LICENSE). Please [contact Parity](https://www.parity.io/contact/) if you have questions about the licensing of this product.
 
 
