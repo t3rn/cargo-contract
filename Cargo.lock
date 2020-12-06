@@ -413,7 +413,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "631ae5198c9be5e753e5cc215e1bd73c2b466a3565173db433f52bb9d3e66dba"
 
 [[package]]
-name = "cargo-contract"
+name = "cargo-t3rn-contract"
 version = "0.7.0"
 dependencies = [
  "anyhow",

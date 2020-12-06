@@ -12,8 +12,12 @@ A CLI tool for helping setting up and managing WebAssembly smart contracts writt
 
   - **rust-src**: `rustup component add rust-src`
   - **wasm-opt**: https://github.com/WebAssembly/binaryen#tools
-
-- **Install latest version from [crates.io](https://crates.io/crates/cargo-contract)**
+   
+`cargo install --git https://github.com/MaciejBaj/cargo-contract cargo-t3rn-contract --features extrinsics --force`
+- **Install from source**
+ - `cargo build cargo-contract`
+  - `cargo install cargo-contract`
+- **[Not yet, WIP] Install latest version from [crates.io](https://crates.io/crates/cargo-contract)**
   - `cargo install cargo-contract`
 
 ## Usage
@@ -29,14 +33,20 @@ OPTIONS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
+NEW COMMANDS:
+    composable-build       Compiles multiple smart contracts according to schedule
+    composable-deploy      Upload the multiple smart contracts chains according to schedule
+    call-runtime-gateway   Execute smart contract via Runtime Gateway
+    call-contracts-gateway Execute smart contract via Contracts Gateway
+
 SUBCOMMANDS:
-    new                  Setup and create a new smart contract project
-    build                Compiles the smart contract
-    generate-metadata    Generate contract metadata artifacts
-    test                 Test the smart contract off-chain
-    deploy               Upload the smart contract code to the chain
-    instantiate          Instantiate a deployed smart contract
-    help                 Prints this message or the help of the given subcommand(s)
+    new                    Setup and create a new smart contract project
+    build                  Compiles the smart contract
+    generate-metadata      Generate contract metadata artifacts
+    test                   Test the smart contract off-chain
+    deploy                 Upload the smart contract code to the chain
+    instantiate            Instantiate a deployed smart contract
+    help                   Prints this message or the help of the given subcommand(s)
 ```
 
 ## `build` requires the `nightly` toolchain
@@ -52,7 +62,7 @@ The `deploy` and `instantiate` subcommands are **disabled by default**, since th
 
 If you want to try them, you need to enable the `extrinsics` feature:
 
-`cargo install --git https://github.com/paritytech/cargo-contract cargo-contract --features extrinsics --force`
+`cargo install --git https://github.com/MaciejBaj/cargo-contract cargo-t3rn-contract --features extrinsics --force`
 
 Once they are stable and the compilation time is acceptable, we will consider removing the `extrinsics` feature.
 
