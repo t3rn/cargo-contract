@@ -1,13 +1,13 @@
 [package]
-name = "cargo-contract"
+name = "cargo-t3rn-contract"
 version = "0.7.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>", "Maciej Baj <maciej@maciejbaj.com>"]
 build = "build.rs"
 edition = "2018"
 
 license = "GPL-3.0"
 readme = "README.md"
-repository = "https://github.com/paritytech/cargo-contract"
+repository = "https://github.com/MaciejBaj/cargo-contract"
 documentation = "https://substrate.dev/substrate-contracts-workshop/#/"
 homepage = "https://www.parity.io/"
 description = "Setup and deployment tool for developing Wasm based smart contracts via ink!"
