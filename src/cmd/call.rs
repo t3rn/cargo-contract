@@ -58,10 +58,6 @@ pub(crate) fn execute_call<'a>(
                 &data.0,   // input data
             )
             .await?;
-        println!(
-            "RUNTIME GATEWAY EXEC : multistep_call_and_watch res: {:?}",
-            events
-        );
         let execution_stamp = match phase {
             0 => {
                 events

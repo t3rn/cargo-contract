@@ -30,7 +30,7 @@ use std::{
     path::PathBuf,
 };
 #[cfg(feature = "extrinsics")]
-use subxt::{PairSigner};
+use subxt::PairSigner;
 
 use anyhow::{Error, Result};
 use colored::Colorize;

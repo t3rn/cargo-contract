@@ -98,11 +98,15 @@ impl CrateMetadata {
                         Ok(composable_schedule) => Some(composable_schedule),
                         Err(_) => None,
                     };
-                    println!(
-                        "{} {:?}",
-                        "Detected following t3rn schedule".bright_blue().bold(),
-                        composable_schedule
-                    );
+                    if let Some(t3rn_schedule) = composable_schedule.clone() {
+                        println!(
+                            "{} {:?}",
+                            "Detected t3rn schedule with following components:"
+                                .bright_blue()
+                                .bold(),
+                            t3rn_schedule.composables
+                        );
+                    }
                 }
                 if package.name == "ink_lang" {
                     Some(
