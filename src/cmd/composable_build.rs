@@ -14,13 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with cargo-contract.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{
-    fs::metadata,
-    io::{self, Write},
-    path::PathBuf,
-    process::Command,
-};
-
 use crate::{
     crate_metadata::CrateMetadata,
     util,
@@ -30,6 +23,17 @@ use crate::{
 use anyhow::{Context, Result};
 use colored::Colorize;
 use parity_wasm::elements::{External, MemoryType, Module, Section};
+use regex::Regex;
+use std::io::prelude::*;
+use std::{
+    env, fs,
+    fs::metadata,
+    fs::File,
+    io::{self, Write},
+    path::PathBuf,
+    process::Command,
+};
+use wat;
 
 /// This is the maximum number of pages available for a contract to allocate.
 const MAX_MEMORY_PAGES: u32 = 16;
@@ -57,9 +61,9 @@ pub fn get_original_wasm_path(compose: String, crate_metadata: &CrateMetadata) -
 /// Constructs a path to the destination (after optimisations) WASM file
 pub fn get_dest_wasm_path(compose: String, crate_metadata: &CrateMetadata) -> PathBuf {
     let mut dest_wasm =
-        get_compose_target_dest(compose, crate_metadata.target_directory.clone()).clone();
+        get_compose_target_dest(compose.clone(), crate_metadata.target_directory.clone()).clone();
     // let mut dest_wasm = metadata.target_directory.clone();
-    dest_wasm.push(crate_metadata.package_name.clone());
+    dest_wasm.push(compose.clone());
     dest_wasm.set_extension("wasm");
     dest_wasm
 }
@@ -245,9 +249,9 @@ fn optimize_wasm_compose(crate_metadata: &CrateMetadata, compose: String) -> Res
         );
         return Ok(());
     }
-    let dest_wasm = get_dest_wasm_path(compose, crate_metadata);
+    let dest_wasm = get_dest_wasm_path(compose.clone(), crate_metadata);
     let mut optimized = dest_wasm.clone();
-    optimized.set_file_name(format!("{}-opt.wasm", crate_metadata.package_name));
+    optimized.set_file_name(format!("{}-opt.wasm", compose.clone()));
 
     let output = Command::new("wasm-opt")
         .arg(dest_wasm.clone().as_os_str())
@@ -275,6 +279,138 @@ fn optimize_wasm_compose(crate_metadata: &CrateMetadata, compose: String) -> Res
     Ok(())
 }
 
+/// Scanner for Wasm text format contracts.
+/// Developers can write their contract directly in WAT format by following the following rules:
+/// Assign contract as a string constant. Name of the contract must specifically match the composable name (either upper or lowe case).
+/// Contract name and code are looked up by a regexp, therefore a contract must be placed always between: `r#` and `"#;`
+/// static EXAMPLE_WAT_CONTRACT: &str = r#"
+///         (module
+///            (func (export "call"))
+///            (func (export "deploy"))
+///         )
+///         "#;
+/// Out of the above example the scanner will recognize an entry: WatContract { name: "example", code: "(module (func..."deploy")) )" }
+#[derive(Debug)]
+pub struct WatContractsScanner {
+    contracts: Vec<WatContract>,
+}
+
+/// Entry of a smart contract as Wasm text format.
+#[derive(Debug, Clone)]
+pub struct WatContract {
+    code: &'static str,
+    name: &'static str,
+}
+
+impl WatContractsScanner {
+    fn new_empty() -> WatContractsScanner {
+        WatContractsScanner { contracts: vec![] }
+    }
+
+    fn scan_from_text(&mut self, text: &'static str) -> bool {
+        for caps in Regex::new(
+            r"(?P<compose_name>[\w]+)_WAT_CONTRACT: &str = r#(?P<wat_contract>[\s\S]+)#;",
+        )
+        .unwrap()
+        .captures_iter(text)
+        {
+            self.contracts.push(WatContract {
+                name: caps
+                    .name("compose_name")
+                    .map(|r| Box::leak(r.as_str().to_lowercase().into_boxed_str()))
+                    .unwrap(),
+                code: caps.name("wat_contract").map(|r| r.as_str()).unwrap(),
+            });
+        }
+        !self.contracts.is_empty()
+    }
+
+    fn add_contract(&mut self, name: &'static str, code: &'static str) {
+        self.contracts.push({ WatContract { name, code } });
+    }
+
+    fn find_by_name(&mut self, name: String) -> Option<&WatContract> {
+        let r = self.contracts.iter().find(|&c| c.name == name);
+        // println!("find_by_name res {:?} {:?}", name, r);
+        r
+    }
+}
+/// Load a given wasm module read from a contract file and save a compiled wasm byte code as a file.
+///
+/// File will be stored at the same destination path as it would be after regular compilation with xbuild.
+fn compile_wat_to_wasm(
+    compose_name: String,
+    crate_metadata: &CrateMetadata,
+    wat_contract: &WatContract,
+) -> Result<()> {
+    let mut dest_wat_path = get_dest_wasm_path(compose_name.clone(), crate_metadata);
+    dest_wat_path.set_extension("wat");
+    let mut file = File::create(dest_wat_path.clone()).map_err(|e| {
+        println!(
+            "{} {} {}",
+            "Error when creating an empty file for WAT contract at ./target for component: "
+                .bright_red()
+                .bold(),
+            compose_name,
+            e.to_string()
+        );
+        e
+    })?;
+    let mut code_bytes = wat_contract.code.as_bytes();
+    // During regexp search there are additional \" at the beginning and EOF. Strip them out as they're fail the compilation.
+    file.write_all(&code_bytes[1..code_bytes.len() - 1])
+        .map_err(|e| {
+            println!(
+                "{} {} {}",
+                "Error when saving WAT contract as file at ./target for component: "
+                    .bright_red()
+                    .bold(),
+                compose_name,
+                e.to_string()
+            );
+            e
+        })?;
+
+    // After the .wat file is saved, read it again with wat2wasm compiler / parser
+    let wasm_bytes = wat::parse_file(dest_wat_path.clone()).map_err(|e| {
+        println!(
+            "{} {} {}",
+            "Error during WAT contract compilation for component: "
+                .bright_red()
+                .bold(),
+            compose_name,
+            e.to_string()
+        );
+        e
+    })?;
+
+    let mut file = File::create(get_dest_wasm_path(compose_name.clone(), crate_metadata))?;
+    // Write a slice of WASM bytes to the file
+    file.write_all(&wasm_bytes).map_err(|e| {
+        println!(
+            "{} {} {}",
+            "Error when saving WASM contract as file at ./target for component: "
+                .bright_red()
+                .bold(),
+            compose_name,
+            e.to_string()
+        );
+        e
+    })?;
+    Ok(())
+}
+/// Reads contract file (lib.rs) as a text.
+fn read_contracts_file_as_text(crate_metadata: &CrateMetadata) -> String {
+    let target_dir = &crate_metadata.cargo_meta.target_directory;
+    let mut composable_contract_source_path: PathBuf = target_dir.to_path_buf();
+    composable_contract_source_path.pop();
+    composable_contract_source_path.push("lib");
+    composable_contract_source_path.set_extension("rs");
+
+    fs::read_to_string(composable_contract_source_path)
+        .expect("Something went wrong reading the composable contracts file")
+}
+
 /// Executes build of the smart-contract which produces a wasm binary that is ready for deploying.
 ///
 /// It does so by invoking `cargo build` and then post processing the final binary.
@@ -296,9 +432,15 @@ pub(crate) fn execute(
     let mut compose_dest_path = Err(anyhow::anyhow!(
         "Empty composable t3rn contracts schedule. Didn't compile anything."
     ));
+    // Scan for Wasm text format components.
+    let contents = read_contracts_file_as_text(&crate_metadata);
+    let mut contracts_scanner = WatContractsScanner::new_empty();
+    contracts_scanner.scan_from_text(Box::leak(contents.into_boxed_str()));
+
     for compose in composable_schedule.composables.clone() {
         compose_dest_path = execute_with_metadata_composable(
             &crate_metadata,
+            &mut contracts_scanner,
             compose,
             verbosity,
             unstable_options.clone(),
@@ -318,31 +460,61 @@ pub(crate) fn execute(
 /// Uses the supplied `CrateMetadata`. If an instance is not available use [`execute_build`]
 pub(crate) fn execute_with_metadata_composable(
     crate_metadata: &CrateMetadata,
+    wat_contracts_scanner: &mut WatContractsScanner,
     compose: String,
     verbosity: Option<Verbosity>,
     unstable_options: UnstableFlags,
 ) -> Result<PathBuf> {
+    match wat_contracts_scanner.find_by_name(compose.clone()) {
+        Some(wat_contract) => {
+            println!(
+                "{} {} {}",
+                "[1/3]".bold(),
+                "Skipping cargo build; found WAT contract - component:"
+                    .bright_green()
+                    .bold(),
+                compose.as_str().bright_green().bold()
+            );
+            println!(
+                "{} {} {}",
+                "[2/3]".bold(),
+                "Compiling scanned WAT contract to WASM - component:"
+                    .bright_green()
+                    .bold(),
+                compose.as_str().bright_green().bold()
+            );
+            compile_wat_to_wasm(compose.clone(), &crate_metadata, wat_contract)?;
+        }
+        None => {
+            println!(
+                "{} {} {}",
+                "[1/3]".bold(),
+                "Building cargo project - component:".bright_green().bold(),
+                compose.as_str().bright_green().bold()
+            );
+            build_cargo_project_compose(
+                &crate_metadata,
+                compose.clone(),
+                verbosity,
+                unstable_options,
+            )?;
+            println!(
+                " {} {} {}",
+                "[2/3]".bold(),
+                "Post processing wasm file - component:"
+                    .bright_green()
+                    .bold(),
+                compose.as_str().bright_green().bold()
+            );
+            post_process_wasm_compose(&crate_metadata, compose.clone())?;
+        }
+    };
+
     println!(
-        "{} {}",
-        "[1/3]".bold(),
-        "Building cargo project".bright_green().bold()
-    );
-    build_cargo_project_compose(
-        &crate_metadata,
-        compose.clone(),
-        verbosity,
-        unstable_options,
-    )?;
-    println!(
-        " {} {}",
-        "[2/3]".bold(),
-        "Post processing wasm file".bright_green().bold()
-    );
-    post_process_wasm_compose(&crate_metadata, compose.clone())?;
-    println!(
-        " {} {}",
+        " {} {} {}",
         "[3/3]".bold(),
-        "Optimizing wasm file".bright_green().bold()
+        "Optimizing wasm file - component:".bright_green().bold(),
+        compose.as_str().bright_green().bold(),
     );
     optimize_wasm_compose(&crate_metadata, compose.clone())?;
     Ok(crate_metadata.dest_wasm.clone())

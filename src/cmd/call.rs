@@ -39,7 +39,7 @@ pub(crate) fn execute_call<'a>(
     gas_limit: u64,
     data: HexData,
     // ) -> Result<&'a [u8]> {
-) -> Result<()> {
+) -> Result<subxt::runtime_gateway::ExecutionStamp> {
     async_std::task::block_on(async move {
         let cli = ClientBuilder::<ContractsTemplateRuntime>::new()
             .set_url(&extrinsic_opts.url.to_string())
@@ -60,28 +60,39 @@ pub(crate) fn execute_call<'a>(
                 &data.0,   // input data
             )
             .await?;
-        log::info!("multistep_call_and_watch res: {:?}", events);
-        let execution_success_event =
+        println!(
+            "RUNTIME GATEWAY EXEC : multistep_call_and_watch res: {:?}",
             events
-                .multistep_execute_phase_success()?
-                .ok_or(anyhow::anyhow!(
-                    "Failed to find a MultistepExecutePhaseSuccess event"
-                ))?;
-
-        //  /Users/macio/projects/substrate.dev/cargo-contract/target/debug/cargo-contract contract call-runtime-gateway --data 00 --suri //Alice --target //Bob --requester //Charlie
-
-        let instantiated = events
-            .instantiated()?
-            .ok_or(anyhow::anyhow!("Failed to find Instantiated event"))?;
-
-
-        log::info!(
-            "multistep_call_and_watch execution_success_event execution_stamp {:?}",
-            execution_success_event.execution_stamp
         );
+        let execution_stamp = match phase {
+            0 => {
+                events
+                    .runtime_gateway_versatile_execution_success()?
+                    .ok_or(anyhow::anyhow!(
+                        "Failed to find a RuntimeGatewayVersatileExecutionSuccessEvent event"
+                    ))?
+                    .execution_stamp
+            }
+            1 => {
+                events
+                    .runtime_gateway_versatile_commit_success()?
+                    .ok_or(anyhow::anyhow!(
+                        "Failed to find a RuntimeGatewayVersatileExecutionCommitEvent event"
+                    ))?
+                    .execution_stamp
+            }
+            2 => {
+                events
+                    .runtime_gateway_versatile_revert_success()?
+                    .ok_or(anyhow::anyhow!(
+                        "Failed to find a RuntimeGatewayVersatileExecutionRevertEvent event"
+                    ))?
+                    .execution_stamp
+            }
+            _ => Default::default(), // Phases should only be 0,1,2 at this point.
+        };
 
-
-        Ok(())
+        Ok(execution_stamp)
     })
 }
 
@@ -124,25 +135,65 @@ pub(crate) fn execute_contract_call<'a>(
         log::info!("multistep_call_and_watch res: {:?}", events);
         let execution_success_event =
             events
-                .multistep_execute_phase_success()?
+                .contracts_gateway_execution_success()?
                 .ok_or(anyhow::anyhow!(
                     "Failed to find a MultistepExecutePhaseSuccess event"
                 ))?;
 
         //  /Users/macio/projects/substrate.dev/cargo-contract/target/debug/cargo-contract contract call-runtime-gateway --data 00 --suri //Alice --target //Bob --requester //Charlie
 
-        let instantiated = events
-            .instantiated()?
-            .ok_or(anyhow::anyhow!("Failed to find Instantiated event"))?;
-
+        // let instantiated = events
+        //     .instantiated()?
+        //     .ok_or(anyhow::anyhow!("Failed to find Instantiated event"))?;
+        println!("{:?}", events);
 
         log::info!(
             "multistep_call_and_watch execution_success_event execution_stamp {:?}",
             execution_success_event.execution_stamp
         );
-
-
         Ok(())
+    })
+}
+
+/// Instantiate a contract stored at the supplied code hash.
+/// Returns the account id of the instantiated contract if successful.
+///
+/// Creates an extrinsic with the `Contracts::instantiate` Call, submits via RPC, then waits for
+/// the `ContractsEvent::Instantiated` event.
+pub(crate) fn call_regular_contract<'a>(
+    extrinsic_opts: &ExtrinsicOpts,
+    contract_dest: <ContractsTemplateRuntime as System>::AccountId,
+    value: <ContractsTemplateRuntime as Balances>::Balance,
+    gas_limit: u64,
+    data: HexData,
+) -> Result<Vec<u8>> {
+    async_std::task::block_on(async move {
+        let cli = ClientBuilder::<ContractsTemplateRuntime>::new()
+            .set_url(&extrinsic_opts.url.to_string())
+            .build()
+            .await?;
+
+        let signer = extrinsic_opts.signer()?;
+        let events = cli
+            .call_and_watch(
+                &signer,
+                &contract_dest,
+                value,     // value
+                gas_limit, // gas_limit
+                &data.0,   // input data
+            )
+            .await?;
+        // ContractExecution
+        println!("regular contract call result: {:?}", events);
+        let contract_execution_event = events
+            .contract_execution()?
+            .ok_or(anyhow::anyhow!("Failed to find ContractExecutionEvent"))?;
+        println!(
+            "regular contract call result: {:?}",
+            contract_execution_event
+        );
+
+        Ok(contract_execution_event.data)
     })
 }
 

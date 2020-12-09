@@ -27,5 +27,6 @@ pub mod new;
 
 #[cfg(feature = "extrinsics")]
 pub(crate) use self::{
-    call::execute_call, deploy::execute_deploy, instantiate::execute_instantiate,
+    call::call_regular_contract, call::execute_call, call::execute_contract_call,
+    deploy::execute_deploy, instantiate::execute_instantiate,
 };
