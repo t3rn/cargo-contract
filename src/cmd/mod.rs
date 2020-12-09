@@ -16,11 +16,17 @@
 
 pub mod build;
 #[cfg(feature = "extrinsics")]
-mod deploy;
+mod call;
+pub mod composable_build;
+#[cfg(feature = "extrinsics")]
+pub mod deploy;
 #[cfg(feature = "extrinsics")]
 mod instantiate;
 pub mod metadata;
 pub mod new;
 
 #[cfg(feature = "extrinsics")]
-pub(crate) use self::{deploy::execute_deploy, instantiate::execute_instantiate};
+pub(crate) use self::{
+    call::call_regular_contract, call::execute_call, call::execute_contract_call,
+    deploy::execute_deploy, instantiate::execute_instantiate,
+};

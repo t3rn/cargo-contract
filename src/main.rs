@@ -20,7 +20,11 @@ mod util;
 mod workspace;
 
 #[cfg(feature = "extrinsics")]
-use sp_core::{crypto::Pair, sr25519, H256};
+use sp_core::{
+    crypto::{AccountId32, Pair},
+    sr25519, Public, H256,
+};
+
 use std::{
     convert::{TryFrom, TryInto},
     path::PathBuf,
@@ -31,6 +35,8 @@ use subxt::PairSigner;
 use anyhow::{Error, Result};
 use colored::Colorize;
 use structopt::{clap, StructOpt};
+
+use crate::crate_metadata::CrateMetadata;
 
 #[derive(Debug, StructOpt)]
 #[structopt(bin_name = "cargo")]
@@ -83,7 +89,7 @@ pub(crate) struct ExtrinsicOpts {
 
 #[cfg(feature = "extrinsics")]
 impl ExtrinsicOpts {
-    pub fn signer(&self) -> Result<PairSigner<subxt::DefaultNodeRuntime, sr25519::Pair>> {
+    pub fn signer(&self) -> Result<PairSigner<subxt::ContractsTemplateRuntime, sr25519::Pair>> {
         let pair =
             sr25519::Pair::from_string(&self.suri, self.password.as_ref().map(String::as_ref))
                 .map_err(|_| anyhow::anyhow!("Secret string error"))?;
@@ -168,6 +174,14 @@ enum Command {
         #[structopt(flatten)]
         unstable_options: UnstableOptions,
     },
+    /// Compiles all of the composable smart contracts described in the schedule
+    #[structopt(name = "composable-build")]
+    ComposableBuild {
+        #[structopt(flatten)]
+        verbosity: VerbosityFlags,
+        #[structopt(flatten)]
+        unstable_options: UnstableOptions,
+    },
     /// Generate contract metadata artifacts
     #[structopt(name = "generate-metadata")]
     GenerateMetadata {
@@ -189,6 +203,14 @@ enum Command {
         #[structopt(parse(from_os_str))]
         wasm_path: Option<PathBuf>,
     },
+    /// Upload all smart contracts selected in composable schedule to appointed by urls chains.
+    #[cfg(feature = "extrinsics")]
+    #[structopt(name = "composable-deploy")]
+    ComposableDeploy {
+        /// Secret key URI for the account deploying the contract.
+        #[structopt(name = "suri", long, short)]
+        suri: String,
+    },
     /// Instantiate a deployed smart contract
     #[cfg(feature = "extrinsics")]
     #[structopt(name = "instantiate")]
@@ -206,6 +228,81 @@ enum Command {
         code_hash: H256,
         /// Hex encoded data to call a contract constructor
         #[structopt(long)]
+        data: HexData,
+    },
+    /// Call for smart contract execution on Runtime Gateway
+    #[cfg(feature = "extrinsics")]
+    #[structopt(name = "call-runtime-gateway")]
+    CallRuntimeGateway {
+        #[structopt(flatten)]
+        extrinsic_opts: ExtrinsicOpts,
+        /// Target chain destination
+        #[structopt(name = "target", long, short)]
+        target: String,
+        /// Target chain destination
+        #[structopt(name = "requester", long, short)]
+        requester: String,
+        /// Execution Phase
+        #[structopt(name = "phase", long, default_value = "0")]
+        phase: u8,
+        /// Value of balance transfer optionally attached to the execution order
+        #[structopt(name = "value", long, default_value = "0")]
+        value: u128,
+        /// Maximum amount of gas to be used for this command
+        #[structopt(name = "gas", long, default_value = "500000000")]
+        gas_limit: u64,
+        /// Path to wasm contract code, defaults to ./target/<name>-pruned.wasm
+        #[structopt(parse(from_os_str))]
+        wasm_path: Option<PathBuf>,
+        /// Hex encoded data to call a contract constructor
+        #[structopt(long, default_value = "00")]
+        data: HexData,
+    },
+    /// Call for smart contract execution on Runtime Gateway
+    #[cfg(feature = "extrinsics")]
+    #[structopt(name = "call-contracts-gateway")]
+    CallContractsGateway {
+        #[structopt(flatten)]
+        extrinsic_opts: ExtrinsicOpts,
+        /// Target chain destination
+        #[structopt(long, default_value = "00")]
+        target: HexData,
+        /// Target chain destination
+        #[structopt(name = "requester", long, short)]
+        requester: String,
+        /// Execution Phase
+        #[structopt(name = "phase", long, default_value = "0")]
+        phase: u8,
+        /// Value of balance transfer optionally attached to the execution order
+        #[structopt(name = "value", long, default_value = "0")]
+        value: u128,
+        /// Maximum amount of gas to be used for this command
+        #[structopt(name = "gas", long, default_value = "3875000000")]
+        gas_limit: u64,
+        /// Path to wasm contract code, defaults to ./target/<name>-pruned.wasm
+        #[structopt(parse(from_os_str))]
+        wasm_path: Option<PathBuf>,
+        /// Hex encoded data to call a contract constructor
+        #[structopt(long, default_value = "00")]
+        data: HexData,
+    },
+    /// Call a regular smart contract execution via Contracts Pallet Call
+    #[cfg(feature = "extrinsics")]
+    #[structopt(name = "call-contract")]
+    CallContract {
+        #[structopt(flatten)]
+        extrinsic_opts: ExtrinsicOpts,
+        /// Target chain destination
+        #[structopt(long, default_value = "00")]
+        target: HexData,
+        /// Value of balance transfer optionally attached to the execution order
+        #[structopt(name = "value", long, default_value = "0")]
+        value: u128,
+        /// Maximum amount of gas to be used for this command
+        #[structopt(name = "gas", long, default_value = "3875000000")]
+        gas_limit: u64,
+        /// Hex encoded data to call a contract constructor
+        #[structopt(long, default_value = "00")]
         data: HexData,
     },
 }
@@ -253,6 +350,21 @@ fn exec(cmd: Command) -> Result<String> {
                 dest_wasm.display().to_string().bold()
             ))
         }
+        Command::ComposableBuild {
+            verbosity,
+            unstable_options,
+        } => {
+            let manifest_path = Default::default();
+            let dest_wasm = cmd::composable_build::execute(
+                &manifest_path,
+                verbosity.try_into()?,
+                unstable_options.try_into()?,
+            )?;
+            Ok(format!(
+                "\nYour composable contract(s) is/are ready. You can find it the following directory:\n{}",
+                dest_wasm.display().to_string().bold()
+            ))
+        }
         Command::GenerateMetadata {
             verbosity,
             unstable_options,
@@ -277,6 +389,50 @@ fn exec(cmd: Command) -> Result<String> {
             Ok(format!("Code hash: {:?}", code_hash))
         }
         #[cfg(feature = "extrinsics")]
+        Command::ComposableDeploy { suri } => {
+            let manifest_path = Default::default();
+            let crate_metadata = CrateMetadata::collect(&manifest_path)?;
+            println!(
+                "{}",
+                "Deploy composable components to appointed urls"
+                    .bright_blue()
+                    .bold(),
+            );
+            let composable_schedule = crate_metadata.clone().t3rn_composable_schedule
+                .expect("Failed to read composable metadata from JSON using serde. Make sure your Cargo.toml follows the composable metadata format");
+            match composable_schedule.deploy {
+                Some(deploy_schedule) => {
+                    for deploy in deploy_schedule {
+                        println!("Deploying: {:?}", deploy);
+                        let component_extrinsic_opts = ExtrinsicOpts {
+                            url: url::Url::parse(&deploy.url)?,
+                            suri: suri.to_string(),
+                            password: None,
+                        };
+                        let dest_wasm_path = cmd::composable_build::get_dest_wasm_path(
+                            deploy.compose.clone(),
+                            &crate_metadata.clone(),
+                        );
+                        let code_hash =
+                            cmd::execute_deploy(&component_extrinsic_opts, Some(&dest_wasm_path))?;
+                        println!(
+                            "{} - {} {:?}",
+                            deploy.compose.bright_blue().bold(),
+                            "successfully deployed byte code with hash: ".bright_blue(),
+                            code_hash
+                        );
+                    }
+                    Ok(format!(
+                        "All components successfully deployed for {:?}",
+                        suri
+                    ))
+                }
+                None => Err(anyhow::anyhow!(
+                    "Nothing to deploy. Empty deploy key of composable metadata."
+                )),
+            }
+        }
+        #[cfg(feature = "extrinsics")]
         Command::Instantiate {
             extrinsic_opts,
             endowment,
@@ -292,6 +448,96 @@ fn exec(cmd: Command) -> Result<String> {
                 data.clone(),
             )?;
             Ok(format!("Contract account: {:?}", contract_account))
+        }
+        #[cfg(feature = "extrinsics")]
+        Command::CallRuntimeGateway {
+            extrinsic_opts,
+            target,
+            requester,
+            wasm_path,
+            phase,
+            value,
+            gas_limit,
+            data,
+        } => {
+            let code = cmd::deploy::load_contract_code(wasm_path.as_ref())?;
+
+            let pair_target = sr25519::Pair::from_string(target, None)
+                .map_err(|_| anyhow::anyhow!("Target account read string error"))?;
+
+            let pair_requester = sr25519::Pair::from_string(requester, None)
+                .map_err(|_| anyhow::anyhow!("Requester account read string error"))?;
+
+            let res = cmd::execute_call(
+                extrinsic_opts,
+                AccountId32::from(pair_requester.public()),
+                AccountId32::from(pair_target.public()),
+                *phase,
+                &code,
+                *value,
+                *gas_limit,
+                data.clone(),
+            )?;
+
+            Ok(format!("CallRuntimeGateway result: {:?}", res))
+        }
+        #[cfg(feature = "extrinsics")]
+        Command::CallContractsGateway {
+            extrinsic_opts,
+            target,
+            requester,
+            wasm_path,
+            phase,
+            value,
+            gas_limit,
+            data,
+        } => {
+            let code = match cmd::deploy::load_contract_code(wasm_path.as_ref()) {
+                Ok(loaded_code) => loaded_code,
+                Err(_) => {
+                    println!(
+                        "Correct code not found. Proceeding with a direct contract call at target_dest"
+                    );
+                    vec![]
+                }
+            };
+            let pair_requester = sr25519::Pair::from_string(requester, None)
+                .map_err(|_| anyhow::anyhow!("Requester account read string error"))?;
+            println!(
+                ".clone().0.as_slice() {:?} {:?} ",
+                target,
+                target.clone().0.as_slice()
+            );
+            let res = cmd::execute_contract_call(
+                extrinsic_opts,
+                AccountId32::from(pair_requester.public()),
+                AccountId32::from(sr25519::Public::from_slice(target.0.as_slice())),
+                *phase,
+                &code,
+                *value,
+                *gas_limit,
+                data.clone(),
+            )?;
+
+            Ok(format!("CallRuntimeGateway result: {:?}", res))
+        }
+        #[cfg(feature = "extrinsics")]
+        Command::CallContract {
+            extrinsic_opts,
+            target,
+            value,
+            gas_limit,
+            data,
+        } => {
+            let res = cmd::call_regular_contract(
+                extrinsic_opts,
+                AccountId32::from(sr25519::Public::from_slice(target.0.as_slice())),
+                *value,
+                *gas_limit,
+                data.clone(),
+            )?;
+
+            Ok(format!("Call regular contract result: {:?}", res))
         }
     }
 }

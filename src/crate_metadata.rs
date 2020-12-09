@@ -17,20 +17,46 @@
 use crate::workspace::ManifestPath;
 use anyhow::{Context, Result};
 use cargo_metadata::{Metadata as CargoMetadata, MetadataCommand, Package};
+use colored::Colorize;
 use semver::Version;
+use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::{fs, path::PathBuf};
 use toml::value;
 use url::Url;
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ComposableDeployConfig {
+    pub compose: String,
+    pub vm: String,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ComposableExecConfig {
+    pub compose: String,
+    pub gateway: String,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ComposableScheduleMetadata {
+    pub composables: Vec<String>,
+    pub schedule: Option<String>,
+    pub deploy: Option<Vec<ComposableDeployConfig>>,
+    pub exec: Option<Vec<ComposableExecConfig>>,
+}
+
 /// Relevant metadata obtained from Cargo.toml.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CrateMetadata {
     pub manifest_path: ManifestPath,
     pub cargo_meta: cargo_metadata::Metadata,
     pub package_name: String,
+    pub t3rn_composable_schedule: Option<ComposableScheduleMetadata>,
     pub root_package: Package,
     pub original_wasm: PathBuf,
+    pub target_directory: PathBuf,
     pub dest_wasm: PathBuf,
     pub ink_version: Version,
     pub documentation: Option<Url>,
@@ -46,6 +72,8 @@ impl CrateMetadata {
         // Normalize the package name.
         let package_name = root_package.name.replace("-", "_");
 
+
+
         // {target_dir}/wasm32-unknown-unknown/release/{package_name}.wasm
         let mut original_wasm = metadata.target_directory.clone();
         original_wasm.push("wasm32-unknown-unknown");
@@ -58,10 +86,28 @@ impl CrateMetadata {
         dest_wasm.push(package_name.clone());
         dest_wasm.set_extension("wasm");
 
+        let mut composable_schedule: Option<ComposableScheduleMetadata> = None;
+
         let ink_version = metadata
             .packages
             .iter()
             .find_map(|package| {
+                // Extract the composable metadata which should be place in the Cargo.toml of package_name.
+                if package.name == package_name.clone() {
+                    composable_schedule = match serde_json::from_value(package.metadata.clone()) {
+                        Ok(composable_schedule) => Some(composable_schedule),
+                        Err(_) => None,
+                    };
+                    if let Some(t3rn_schedule) = composable_schedule.clone() {
+                        println!(
+                            "{} {:?}",
+                            "Detected t3rn schedule with following components:"
+                                .bright_blue()
+                                .bold(),
+                            t3rn_schedule.composables
+                        );
+                    }
+                }
                 if package.name == "ink_lang" {
                     Some(
                         Version::parse(&package.version.to_string())
@@ -77,7 +123,7 @@ impl CrateMetadata {
 
         let crate_metadata = CrateMetadata {
             manifest_path: manifest_path.clone(),
-            cargo_meta: metadata,
+            cargo_meta: metadata.clone(),
             root_package,
             package_name,
             original_wasm,
@@ -86,6 +132,8 @@ impl CrateMetadata {
             documentation,
             homepage,
             user,
+            t3rn_composable_schedule: composable_schedule,
+            target_directory: metadata.target_directory.clone(),
         };
         Ok(crate_metadata)
     }

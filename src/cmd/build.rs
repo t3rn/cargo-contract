@@ -91,6 +91,9 @@ fn build_cargo_project(
         if !exit_status.success() {
             anyhow::bail!("xbuild failed with status {}", exit_status)
         }
+
+        println!("exit_status {:?}", exit_status);
+
         Ok(())
     };
 

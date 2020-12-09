@@ -15,7 +15,9 @@
 // along with cargo-contract.  If not, see <http://www.gnu.org/licenses/>.
 
 use anyhow::Result;
-use subxt::{balances::Balances, contracts::*, system::System, ClientBuilder, DefaultNodeRuntime};
+use subxt::{
+    balances::Balances, contracts::*, system::System, ClientBuilder, ContractsTemplateRuntime,
+};
 
 use crate::{ExtrinsicOpts, HexData};
 
@@ -26,13 +28,13 @@ use crate::{ExtrinsicOpts, HexData};
 /// the `ContractsEvent::Instantiated` event.
 pub(crate) fn execute_instantiate(
     extrinsic_opts: &ExtrinsicOpts,
-    endowment: <DefaultNodeRuntime as Balances>::Balance,
+    endowment: <ContractsTemplateRuntime as Balances>::Balance,
     gas_limit: u64,
-    code_hash: <DefaultNodeRuntime as System>::Hash,
+    code_hash: <ContractsTemplateRuntime as System>::Hash,
     data: HexData,
-) -> Result<<DefaultNodeRuntime as System>::AccountId> {
+) -> Result<<ContractsTemplateRuntime as System>::AccountId> {
     async_std::task::block_on(async move {
-        let cli = ClientBuilder::<DefaultNodeRuntime>::new()
+        let cli = ClientBuilder::<ContractsTemplateRuntime>::new()
             .set_url(&extrinsic_opts.url.to_string())
             .build()
             .await?;
@@ -64,7 +66,6 @@ mod tests {
 "#;
 
     #[test]
-    #[ignore] // depends on a local substrate node running
     fn instantiate_contract() {
         with_tmp_dir(|path| {
             let wasm = wabt::wat2wasm(CONTRACT).expect("invalid wabt");

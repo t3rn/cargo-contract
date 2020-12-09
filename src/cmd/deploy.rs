@@ -18,14 +18,14 @@ use std::{fs, io::Read, path::PathBuf};
 
 use anyhow::{Context, Result};
 use sp_core::H256;
-use subxt::{contracts::*, ClientBuilder, DefaultNodeRuntime};
+use subxt::{contracts::*, ClientBuilder, ContractsTemplateRuntime};
 
 use crate::{crate_metadata, ExtrinsicOpts};
 
 /// Load the wasm blob from the specified path.
 ///
 /// Defaults to the target contract wasm in the current project, inferred via the crate metadata.
-fn load_contract_code(path: Option<&PathBuf>) -> Result<Vec<u8>> {
+pub fn load_contract_code(path: Option<&PathBuf>) -> Result<Vec<u8>> {
     let contract_wasm_path = match path {
         Some(path) => path.clone(),
         None => {
@@ -57,7 +57,7 @@ pub(crate) fn execute_deploy(
     let code = load_contract_code(contract_wasm_path)?;
 
     async_std::task::block_on(async move {
-        let cli = ClientBuilder::<DefaultNodeRuntime>::new()
+        let cli = ClientBuilder::<ContractsTemplateRuntime>::new()
             .set_url(&extrinsic_opts.url.to_string())
             .build()
             .await?;
@@ -87,7 +87,6 @@ mod tests {
 "#;
 
     #[test]
-    #[ignore] // depends on a local substrate node running
     fn deploy_contract() {
         with_tmp_dir(|path| {
             let wasm = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
