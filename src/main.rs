@@ -30,7 +30,7 @@ use std::{
     path::PathBuf,
 };
 #[cfg(feature = "extrinsics")]
-use subxt::{system::System, ContractsTemplateRuntime, PairSigner};
+use subxt::{PairSigner};
 
 use anyhow::{Error, Result};
 use colored::Colorize;
@@ -501,10 +501,6 @@ fn exec(cmd: Command) -> Result<String> {
                     vec![]
                 }
             };
-            // let code = cmd::deploy::load_contract_code(wasm_path.as_ref())?;
-            // let pair_target = sr25519::Pair::from_string(target, None)
-            //     .map_err(|_| anyhow::anyhow!("Target account read string error"))?;
-            use sp_core::crypto::Ss58Codec;
             let pair_requester = sr25519::Pair::from_string(requester, None)
                 .map_err(|_| anyhow::anyhow!("Requester account read string error"))?;
             println!(

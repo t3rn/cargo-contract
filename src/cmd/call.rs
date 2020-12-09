@@ -19,8 +19,6 @@ use subxt::{
     balances::Balances, contracts::*, contracts_gateway::*, runtime_gateway::*, system::System,
     ClientBuilder, ContractsTemplateRuntime,
 };
-// use self::{deploy::load_contract_code};
-use crate::cmd::deploy::load_contract_code;
 
 use crate::{ExtrinsicOpts, HexData};
 

@@ -24,9 +24,8 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use parity_wasm::elements::{External, MemoryType, Module, Section};
 use regex::Regex;
-use std::io::prelude::*;
 use std::{
-    env, fs,
+    fs,
     fs::metadata,
     fs::File,
     io::{self, Write},
@@ -325,10 +324,6 @@ impl WatContractsScanner {
         !self.contracts.is_empty()
     }
 
-    fn add_contract(&mut self, name: &'static str, code: &'static str) {
-        self.contracts.push({ WatContract { name, code } });
-    }
-
     fn find_by_name(&mut self, name: String) -> Option<&WatContract> {
         let r = self.contracts.iter().find(|&c| c.name == name);
         // println!("find_by_name res {:?} {:?}", name, r);
@@ -356,7 +351,7 @@ fn compile_wat_to_wasm(
         );
         e
     })?;
-    let mut code_bytes = wat_contract.code.as_bytes();
+    let code_bytes = wat_contract.code.as_bytes();
     // During regexp search there are additional \" at the beginning and EOF. Strip them out as they're fail the compilation.
     file.write_all(&code_bytes[1..code_bytes.len() - 1])
         .map_err(|e| {

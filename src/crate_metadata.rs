@@ -96,7 +96,7 @@ impl CrateMetadata {
                 if package.name == package_name.clone() {
                     composable_schedule = match serde_json::from_value(package.metadata.clone()) {
                         Ok(composable_schedule) => Some(composable_schedule),
-                        Err(composable_schedule) => None,
+                        Err(_) => None,
                     };
                     println!(
                         "{} {:?}",
