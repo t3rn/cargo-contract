@@ -126,7 +126,6 @@ pub(crate) fn execute_contract_call<'a>(
                 &data.0,   // input data
             )
             .await?;
-        log::info!("multistep_call_and_watch res: {:?}", events);
         let execution_success_event =
             events
                 .contracts_gateway_execution_success()?
