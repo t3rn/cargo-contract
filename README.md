@@ -41,6 +41,7 @@ NEW COMMANDS:
     composable-deploy      Upload the multiple smart contracts chains according to schedule
     call-runtime-gateway   Execute smart contract via Runtime Gateway
     call-contracts-gateway Execute smart contract via Contracts Gateway
+    call-contract          Execute smart contract via regular Contract call
 
 SUBCOMMANDS:
     new                    Setup and create a new smart contract project
