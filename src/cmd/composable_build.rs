@@ -338,6 +338,21 @@ fn compile_wat_to_wasm(
     crate_metadata: &CrateMetadata,
     wat_contract: &WatContract,
 ) -> Result<()> {
+    let dest_wat_dir = get_compose_target_dest(
+        compose_name.clone(),
+        crate_metadata.target_directory.clone(),
+    );
+    fs::create_dir_all(dest_wat_dir.clone()).map_err(|e| {
+        println!(
+            "{} {} {}",
+            "Error when creating a new directory for WAT contract at ./target for component: "
+                .bright_red()
+                .bold(),
+            compose_name,
+            e.to_string()
+        );
+        e
+    })?;
     let mut dest_wat_path = get_dest_wasm_path(compose_name.clone(), crate_metadata);
     dest_wat_path.set_extension("wat");
     let mut file = File::create(dest_wat_path.clone()).map_err(|e| {
