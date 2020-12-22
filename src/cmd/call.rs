@@ -36,8 +36,7 @@ pub(crate) fn execute_call<'a>(
     value: <ContractsTemplateRuntime as Balances>::Balance,
     gas_limit: u64,
     data: HexData,
-    // ) -> Result<&'a [u8]> {
-) -> Result<subxt::runtime_gateway::ExecutionStamp> {
+) -> Result<subxt::runtime_gateway::ExecutionStampEmittable> {
     async_std::task::block_on(async move {
         let cli = ClientBuilder::<ContractsTemplateRuntime>::new()
             .set_url(&extrinsic_opts.url.to_string())
