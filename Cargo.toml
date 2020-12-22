@@ -1,6 +1,6 @@
 [package]
 name = "cargo-t3rn-contract"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Parity Technologies <admin@parity.io>", "Maciej Baj <maciej@maciejbaj.com>"]
 build = "build.rs"
 edition = "2018"
@@ -44,7 +44,7 @@ wat = { version = "1.0", default-features = false }
 # dependencies for optional extrinsics feature
 async-std = { version = "1.6.2", optional = true }
 sp-core = { version = "2.0.0-rc5", optional = true }
-subxt = { version = "0.12.0", package = "substrate-subxt", git = "https://github.com/MaciejBaj/substrate-subxt", branch = "development", optional = true }
+subxt = { version = "0.12.0", package = "substrate-subxt", path = "../subxt", optional = true }
 futures = { version = "0.3.2", optional = true }
 hex = { version = "0.4.0", optional = true }
 meval = "0.2"
