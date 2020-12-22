@@ -1,6 +1,6 @@
 [package]
 name = "cargo-t3rn-contract"
-version = "0.7.0"
+version = "0.4.1"
 authors = ["Parity Technologies <admin@parity.io>", "Maciej Baj <maciej@maciejbaj.com>"]
 build = "build.rs"
 edition = "2018"

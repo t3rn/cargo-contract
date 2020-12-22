@@ -414,7 +414,7 @@ checksum = "631ae5198c9be5e753e5cc215e1bd73c2b466a3565173db433f52bb9d3e66dba"
 
 [[package]]
 name = "cargo-t3rn-contract"
-version = "0.7.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3959,7 +3959,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.12.0"
-source = "git+https://github.com/MaciejBaj/substrate-subxt?branch=development#02aebd5c0cb39d8085dc9cbe2f9f0829343b9ab9"
+source = "git+https://github.com/MaciejBaj/substrate-subxt?branch=development#632da8964b7930de786b2301d397a222b17574ec"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -3993,7 +3993,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.12.0"
-source = "git+https://github.com/MaciejBaj/substrate-subxt?branch=development#02aebd5c0cb39d8085dc9cbe2f9f0829343b9ab9"
+source = "git+https://github.com/MaciejBaj/substrate-subxt?branch=development#632da8964b7930de786b2301d397a222b17574ec"
 dependencies = [
  "heck",
  "proc-macro-crate",
