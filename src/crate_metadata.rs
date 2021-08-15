@@ -72,8 +72,6 @@ impl CrateMetadata {
         // Normalize the package name.
         let package_name = root_package.name.replace("-", "_");
 
-
-
         // {target_dir}/wasm32-unknown-unknown/release/{package_name}.wasm
         let mut original_wasm = metadata.target_directory.clone();
         original_wasm.push("wasm32-unknown-unknown");
@@ -87,6 +85,18 @@ impl CrateMetadata {
         dest_wasm.set_extension("wasm");
 
         let mut composable_schedule: Option<ComposableScheduleMetadata> = None;
+
+        // let user = toml
+        //     .get("package")
+        //     .and_then(|v| v.get("metadata"))
+        //     .and_then(|v| v.get("contract"))
+        //     .and_then(|v| v.get("user"))
+        //     .and_then(|v| v.as_table())
+        //     .map(|v| {
+        //         // convert user defined section from toml to json
+        //         serde_json::to_string(v).and_then(|json| serde_json::from_str(&json))
+        //     })
+        //     .transpose()?;
 
         let ink_version = metadata
             .packages
