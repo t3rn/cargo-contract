@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright 2018-2021 Parity Technologies (UK) Ltd.
 // This file is part of cargo-contract.
 //
 // cargo-contract is free software: you can redistribute it and/or modify
@@ -14,10 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with cargo-contract.  If not, see <http://www.gnu.org/licenses/>.
 
+<<<<<<< HEAD
 use anyhow::Result;
 use subxt::{
     balances::Balances, contracts::*, system::System, ClientBuilder, ContractsTemplateRuntime,
 };
+=======
+use anyhow::{Context, Result};
+use subxt::{balances::Balances, contracts::*, system::System, ClientBuilder, DefaultNodeRuntime};
+>>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
 
 use crate::{ExtrinsicOpts, HexData};
 
@@ -45,7 +50,7 @@ pub(crate) fn execute_instantiate(
             .await?;
         let instantiated = events
             .instantiated()?
-            .ok_or(anyhow::anyhow!("Failed to find Instantiated event"))?;
+            .context("Failed to find Instantiated event")?;
 
         Ok(instantiated.contract)
     })

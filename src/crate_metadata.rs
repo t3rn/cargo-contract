@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright 2018-2021 Parity Technologies (UK) Ltd.
 // This file is part of cargo-contract.
 //
 // cargo-contract is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with cargo-contract.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::workspace::ManifestPath;
+use crate::ManifestPath;
 use anyhow::{Context, Result};
 use cargo_metadata::{Metadata as CargoMetadata, MetadataCommand, Package};
 use colored::Colorize;
@@ -52,8 +52,12 @@ pub struct ComposableScheduleMetadata {
 pub struct CrateMetadata {
     pub manifest_path: ManifestPath,
     pub cargo_meta: cargo_metadata::Metadata,
+<<<<<<< HEAD
     pub package_name: String,
     pub t3rn_composable_schedule: Option<ComposableScheduleMetadata>,
+=======
+    pub contract_artifact_name: String,
+>>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
     pub root_package: Package,
     pub original_wasm: PathBuf,
     pub target_directory: PathBuf,
@@ -62,28 +66,50 @@ pub struct CrateMetadata {
     pub documentation: Option<Url>,
     pub homepage: Option<Url>,
     pub user: Option<Map<String, Value>>,
+    pub target_directory: PathBuf,
 }
 
 impl CrateMetadata {
     /// Parses the contract manifest and returns relevant metadata.
     pub fn collect(manifest_path: &ManifestPath) -> Result<Self> {
         let (metadata, root_package) = get_cargo_metadata(manifest_path)?;
+        let mut target_directory = metadata.target_directory.as_path().join("ink");
 
-        // Normalize the package name.
+        // Normalize the package and lib name.
         let package_name = root_package.name.replace("-", "_");
+        let lib_name = &root_package
+            .targets
+            .iter()
+            .find(|target| target.kind.iter().any(|t| t == "cdylib"))
+            .expect("lib name not found")
+            .name
+            .replace("-", "_");
 
+        let absolute_manifest_path = manifest_path.absolute_directory()?;
+        let absolute_workspace_root = metadata.workspace_root.canonicalize()?;
+        if absolute_manifest_path != absolute_workspace_root {
+            // If the contract is a package in a workspace, we use the package name
+            // as the name of the sub-folder where we put the `.contract` bundle.
+            target_directory = target_directory.join(package_name);
+        }
+
+<<<<<<< HEAD
 
 
         // {target_dir}/wasm32-unknown-unknown/release/{package_name}.wasm
         let mut original_wasm = metadata.target_directory.clone();
+=======
+        // {target_dir}/wasm32-unknown-unknown/release/{lib_name}.wasm
+        let mut original_wasm = target_directory.clone();
+>>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
         original_wasm.push("wasm32-unknown-unknown");
         original_wasm.push("release");
-        original_wasm.push(package_name.clone());
+        original_wasm.push(lib_name.clone());
         original_wasm.set_extension("wasm");
 
-        // {target_dir}/{package_name}.wasm
-        let mut dest_wasm = metadata.target_directory.clone();
-        dest_wasm.push(package_name.clone());
+        // {target_dir}/{lib_name}.wasm
+        let mut dest_wasm = target_directory.clone();
+        dest_wasm.push(lib_name.clone());
         dest_wasm.set_extension("wasm");
 
         let mut composable_schedule: Option<ComposableScheduleMetadata> = None;
@@ -117,23 +143,31 @@ impl CrateMetadata {
                     None
                 }
             })
-            .ok_or(anyhow::anyhow!("No 'ink_lang' dependency found"))?;
+            .ok_or_else(|| anyhow::anyhow!("No 'ink_lang' dependency found"))?;
 
-        let (documentation, homepage, user) = get_cargo_toml_metadata(manifest_path)?;
+        let ExtraMetadata {
+            documentation,
+            homepage,
+            user,
+        } = get_cargo_toml_metadata(manifest_path)?;
 
         let crate_metadata = CrateMetadata {
             manifest_path: manifest_path.clone(),
             cargo_meta: metadata.clone(),
             root_package,
-            package_name,
-            original_wasm,
-            dest_wasm,
+            contract_artifact_name: lib_name.to_string(),
+            original_wasm: original_wasm.into(),
+            dest_wasm: dest_wasm.into(),
             ink_version,
             documentation,
             homepage,
             user,
+<<<<<<< HEAD
             t3rn_composable_schedule: composable_schedule,
             target_directory: metadata.target_directory.clone(),
+=======
+            target_directory: target_directory.into(),
+>>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
         };
         Ok(crate_metadata)
     }
@@ -143,7 +177,7 @@ impl CrateMetadata {
 fn get_cargo_metadata(manifest_path: &ManifestPath) -> Result<(CargoMetadata, Package)> {
     let mut cmd = MetadataCommand::new();
     let metadata = cmd
-        .manifest_path(manifest_path)
+        .manifest_path(manifest_path.as_ref())
         .exec()
         .context("Error invoking `cargo metadata`")?;
     let root_package_id = metadata
@@ -163,16 +197,21 @@ fn get_cargo_metadata(manifest_path: &ManifestPath) -> Result<(CargoMetadata, Pa
     Ok((metadata, root_package))
 }
 
+/// Extra metadata not available via `cargo metadata`.
+struct ExtraMetadata {
+    documentation: Option<Url>,
+    homepage: Option<Url>,
+    user: Option<Map<String, Value>>,
+}
+
 /// Read extra metadata not available via `cargo metadata` directly from `Cargo.toml`
-fn get_cargo_toml_metadata(
-    manifest_path: &ManifestPath,
-) -> Result<(Option<Url>, Option<Url>, Option<Map<String, Value>>)> {
+fn get_cargo_toml_metadata(manifest_path: &ManifestPath) -> Result<ExtraMetadata> {
     let toml = fs::read_to_string(manifest_path)?;
     let toml: value::Table = toml::from_str(&toml)?;
 
     let get_url = |field_name| -> Result<Option<Url>> {
         toml.get("package")
-            .ok_or(anyhow::anyhow!("package section not found"))?
+            .ok_or_else(|| anyhow::anyhow!("package section not found"))?
             .get(field_name)
             .and_then(|v| v.as_str())
             .map(Url::parse)
@@ -196,5 +235,9 @@ fn get_cargo_toml_metadata(
         })
         .transpose()?;
 
-    Ok((documentation, homepage, user))
+    Ok(ExtraMetadata {
+        documentation,
+        homepage,
+        user,
+    })
 }

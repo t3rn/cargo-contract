@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright 2018-2021 Parity Technologies (UK) Ltd.
 // This file is part of cargo-contract.
 //
 // cargo-contract is free software: you can redistribute it and/or modify
@@ -17,9 +17,11 @@
 use anyhow::{Context, Result};
 
 use super::{metadata, Profile};
-use std::convert::{TryFrom, TryInto};
+use crate::OptimizationPasses;
+
 use std::{
     collections::HashSet,
+    convert::TryFrom,
     fs,
     path::{Path, PathBuf},
 };
@@ -66,13 +68,25 @@ impl ManifestPath {
             None
         }
     }
+
+    /// Returns the absolute directory path of the manifest.
+    pub fn absolute_directory(&self) -> Result<PathBuf, std::io::Error> {
+        let directory = match self.directory() {
+            Some(dir) => dir,
+            None => Path::new("./"),
+        };
+        directory.canonicalize()
+    }
 }
 
-impl TryFrom<&PathBuf> for ManifestPath {
+impl<P> TryFrom<Option<P>> for ManifestPath
+where
+    P: AsRef<Path>,
+{
     type Error = anyhow::Error;
 
-    fn try_from(value: &PathBuf) -> Result<Self, Self::Error> {
-        ManifestPath::new(value)
+    fn try_from(value: Option<P>) -> Result<Self, Self::Error> {
+        value.map_or(Ok(Default::default()), ManifestPath::new)
     }
 }
 
@@ -88,6 +102,12 @@ impl AsRef<Path> for ManifestPath {
     }
 }
 
+impl From<ManifestPath> for PathBuf {
+    fn from(path: ManifestPath) -> Self {
+        path.path
+    }
+}
+
 /// Create, amend and save a copy of the specified `Cargo.toml`.
 pub struct Manifest {
     path: ManifestPath,
@@ -100,11 +120,7 @@ impl Manifest {
     /// Create new Manifest for the given manifest path.
     ///
     /// The path *must* be to a `Cargo.toml`.
-    pub fn new<P>(path: P) -> Result<Manifest>
-    where
-        P: TryInto<ManifestPath, Error = anyhow::Error>,
-    {
-        let manifest_path = path.try_into()?;
+    pub fn new(manifest_path: ManifestPath) -> Result<Manifest> {
         let toml = fs::read_to_string(&manifest_path).context("Loading Cargo.toml")?;
         let toml: value::Table = toml::from_str(&toml)?;
 
@@ -125,14 +141,14 @@ impl Manifest {
         let lib = self
             .toml
             .get_mut("lib")
-            .ok_or(anyhow::anyhow!("lib section not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("lib section not found"))?;
         let crate_types = lib
             .get_mut("crate-type")
-            .ok_or(anyhow::anyhow!("crate-type section not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("crate-type section not found"))?;
 
         crate_types
             .as_array_mut()
-            .ok_or(anyhow::anyhow!("crate-types should be an Array"))
+            .ok_or_else(|| anyhow::anyhow!("crate-types should be an Array"))
     }
 
     /// Add a value to the `[lib] crate-types = []` section.
@@ -144,6 +160,105 @@ impl Manifest {
             crate_types.push(crate_type.into());
         }
         Ok(self)
+    }
+
+    /// Extract `optimization-passes` from `[package.metadata.contract]`
+    pub fn get_profile_optimization_passes(&mut self) -> Option<OptimizationPasses> {
+        self.toml
+            .get("package")?
+            .as_table()?
+            .get("metadata")?
+            .as_table()?
+            .get("contract")?
+            .as_table()?
+            .get("optimization-passes")
+            .map(|val| val.to_string())
+            .map(Into::into)
+    }
+
+    /// Set `optimization-passes` in `[package.metadata.contract]`
+    #[cfg(feature = "test-ci-only")]
+    #[cfg(test)]
+    pub fn set_profile_optimization_passes(
+        &mut self,
+        passes: OptimizationPasses,
+    ) -> Result<Option<value::Value>> {
+        Ok(self
+            .toml
+            .entry("package")
+            .or_insert(value::Value::Table(Default::default()))
+            .as_table_mut()
+            .context("package section should be a table")?
+            .entry("metadata")
+            .or_insert(value::Value::Table(Default::default()))
+            .as_table_mut()
+            .context("metadata section should be a table")?
+            .entry("contract")
+            .or_insert(value::Value::Table(Default::default()))
+            .as_table_mut()
+            .context("metadata.contract section should be a table")?
+            .insert(
+                "optimization-passes".to_string(),
+                value::Value::String(passes.to_string()),
+            ))
+    }
+
+    /// Set the dependency version of `package` to `version`.
+    #[cfg(feature = "test-ci-only")]
+    #[cfg(test)]
+    pub fn set_dependency_version(
+        &mut self,
+        dependency: &str,
+        version: &str,
+    ) -> Result<Option<toml::Value>> {
+        Ok(self
+            .toml
+            .get_mut("dependencies")
+            .ok_or_else(|| anyhow::anyhow!("[dependencies] section not found"))?
+            .get_mut(dependency)
+            .ok_or_else(|| anyhow::anyhow!("{} dependency not found", dependency))?
+            .as_table_mut()
+            .ok_or_else(|| anyhow::anyhow!("{} dependency should be a table", dependency))?
+            .insert("version".into(), value::Value::String(version.into())))
+    }
+
+    /// Set the `lib` name to `name`.
+    #[cfg(feature = "test-ci-only")]
+    #[cfg(test)]
+    pub fn set_lib_name(&mut self, name: &str) -> Result<Option<toml::Value>> {
+        Ok(self
+            .toml
+            .get_mut("lib")
+            .ok_or_else(|| anyhow::anyhow!("[lib] section not found"))?
+            .as_table_mut()
+            .ok_or_else(|| anyhow::anyhow!("[lib] should be a table"))?
+            .insert("name".into(), value::Value::String(name.into())))
+    }
+
+    /// Set the `package` name to `name`.
+    #[cfg(feature = "test-ci-only")]
+    #[cfg(test)]
+    pub fn set_package_name(&mut self, name: &str) -> Result<Option<toml::Value>> {
+        Ok(self
+            .toml
+            .get_mut("package")
+            .ok_or_else(|| anyhow::anyhow!("[package] section not found"))?
+            .as_table_mut()
+            .ok_or_else(|| anyhow::anyhow!("[package] should be a table"))?
+            .insert("name".into(), value::Value::String(name.into())))
+    }
+
+    /// Set the `lib` path to `path`.
+    #[cfg(feature = "test-ci-only")]
+    #[cfg(test)]
+    pub fn set_lib_path(&mut self, path: &str) -> Result<Option<toml::Value>> {
+        Ok(self
+            .toml
+            .get_mut("lib")
+            .ok_or_else(|| anyhow::anyhow!("[lib] section not found"))?
+            .as_table_mut()
+            .ok_or_else(|| anyhow::anyhow!("[lib] should be a table"))?
+            .insert("path".into(), value::Value::String(path.into())))
     }
 
     /// Set `[profile.release]` lto flag
@@ -176,12 +291,12 @@ impl Manifest {
             .or_insert(value::Value::Table(Default::default()));
         let release = profile
             .as_table_mut()
-            .ok_or(anyhow::anyhow!("profile should be a table"))?
+            .ok_or_else(|| anyhow::anyhow!("profile should be a table"))?
             .entry("release")
             .or_insert(value::Value::Table(Default::default()));
         release
             .as_table_mut()
-            .ok_or(anyhow::anyhow!("release should be a table"))
+            .ok_or_else(|| anyhow::anyhow!("release should be a table"))
     }
 
     /// Remove a value from the `[lib] crate-types = []` section
@@ -203,16 +318,16 @@ impl Manifest {
             .or_insert(value::Value::Table(Default::default()));
         let members = workspace
             .as_table_mut()
-            .ok_or(anyhow::anyhow!("workspace should be a table"))?
+            .ok_or_else(|| anyhow::anyhow!("workspace should be a table"))?
             .entry("members")
             .or_insert(value::Value::Array(Default::default()))
             .as_array_mut()
-            .ok_or(anyhow::anyhow!("members should be an array"))?;
+            .ok_or_else(|| anyhow::anyhow!("members should be an array"))?;
 
         if members.contains(&LEGACY_METADATA_PACKAGE_PATH.into()) {
             // warn user if they have legacy metadata generation artifacts
             use colored::Colorize;
-            println!(
+            eprintln!(
                 "{} {} {} {}",
                 "warning:".yellow().bold(),
                 "please remove".bold(),
@@ -252,7 +367,11 @@ impl Manifest {
         let to_absolute = |value_id: String, existing_path: &mut value::Value| -> Result<()> {
             let path_str = existing_path
                 .as_str()
-                .ok_or(anyhow::anyhow!("{} should be a string", value_id))?;
+                .ok_or_else(|| anyhow::anyhow!("{} should be a string", value_id))?;
+            #[cfg(windows)]
+            // On Windows path separators are `\`, hence we need to replace the `/` in
+            // e.g. `src/lib.rs`.
+            let path_str = &path_str.replace("/", "\\");
             let path = PathBuf::from(path_str);
             if path.is_relative() {
                 let lib_abs = abs_dir.join(path);
@@ -263,10 +382,9 @@ impl Manifest {
         };
 
         let rewrite_path = |table_value: &mut value::Value, table_section: &str, default: &str| {
-            let table = table_value.as_table_mut().ok_or(anyhow::anyhow!(
-                "'[{}]' section should be a table",
-                table_section
-            ))?;
+            let table = table_value.as_table_mut().ok_or_else(|| {
+                anyhow::anyhow!("'[{}]' section should be a table", table_section)
+            })?;
 
             match table.get_mut("path") {
                 Some(existing_path) => {
@@ -300,7 +418,7 @@ impl Manifest {
         if let Some(bin) = self.toml.get_mut("bin") {
             let bins = bin
                 .as_array_mut()
-                .ok_or(anyhow::anyhow!("'[[bin]]' section should be a table array"))?;
+                .ok_or_else(|| anyhow::anyhow!("'[[bin]]' section should be a table array"))?;
 
             // Rewrite `[[bin]] path =` value to an absolute path.
             for bin in bins {
@@ -316,7 +434,7 @@ impl Manifest {
                 .collect::<HashSet<_>>();
             let table = dependencies
                 .as_table_mut()
-                .ok_or(anyhow::anyhow!("dependencies should be a table"))?;
+                .ok_or_else(|| anyhow::anyhow!("dependencies should be a table"))?;
             for (name, value) in table {
                 let package_name = {
                     let package = value.get("package");
@@ -352,25 +470,25 @@ impl Manifest {
 
             fs::create_dir_all(&dir).context(format!("Creating directory '{}'", dir.display()))?;
 
-            let name = self
+            let contract_package_name = self
                 .toml
-                .get("lib")
-                .ok_or(anyhow::anyhow!("lib section not found"))?
+                .get("package")
+                .ok_or_else(|| anyhow::anyhow!("package section not found"))?
                 .get("name")
-                .ok_or(anyhow::anyhow!("[lib] name field not found"))?
+                .ok_or_else(|| anyhow::anyhow!("[package] name field not found"))?
                 .as_str()
-                .ok_or(anyhow::anyhow!("[lib] name should be a string"))?;
+                .ok_or_else(|| anyhow::anyhow!("[package] name should be a string"))?;
 
             let ink_metadata = self
                 .toml
                 .get("dependencies")
-                .ok_or(anyhow::anyhow!("[dependencies] section not found"))?
+                .ok_or_else(|| anyhow::anyhow!("[dependencies] section not found"))?
                 .get("ink_metadata")
-                .ok_or(anyhow::anyhow!("{} dependency not found", name))?
+                .ok_or_else(|| anyhow::anyhow!("ink_metadata dependency not found"))?
                 .as_table()
-                .ok_or(anyhow::anyhow!("{} dependency should be a table", name))?;
+                .ok_or_else(|| anyhow::anyhow!("ink_metadata dependency should be a table"))?;
 
-            metadata::generate_package(dir, name, ink_metadata.clone())?;
+            metadata::generate_package(dir, contract_package_name, ink_metadata.clone())?;
         }
 
         let updated_toml = toml::to_string(&self.toml)?;
@@ -383,8 +501,35 @@ impl Manifest {
     }
 }
 
-fn crate_type_exists(crate_type: &str, crate_types: &value::Array) -> bool {
+fn crate_type_exists(crate_type: &str, crate_types: &[value::Value]) -> bool {
     crate_types
         .iter()
         .any(|v| v.as_str().map_or(false, |s| s == crate_type))
+}
+
+#[cfg(test)]
+mod test {
+    use super::ManifestPath;
+    use crate::util::tests::with_tmp_dir;
+    use std::fs;
+
+    #[test]
+    fn must_return_absolute_path_from_absolute_path() {
+        with_tmp_dir(|path| {
+            // given
+            let cargo_toml_path = path.join("Cargo.toml");
+            let _ = fs::File::create(&cargo_toml_path).expect("file creation failed");
+            let manifest_path =
+                ManifestPath::new(cargo_toml_path).expect("manifest path creation failed");
+
+            // when
+            let absolute_path = manifest_path
+                .absolute_directory()
+                .expect("absolute path extraction failed");
+
+            // then
+            assert_eq!(absolute_path.as_path(), path);
+            Ok(())
+        })
+    }
 }

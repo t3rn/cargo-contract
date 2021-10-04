@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright 2018-2021 Parity Technologies (UK) Ltd.
 // This file is part of cargo-contract.
 //
 // cargo-contract is free software: you can redistribute it and/or modify
@@ -23,12 +23,21 @@ use std::{
 use anyhow::Result;
 use heck::CamelCase as _;
 
-pub(crate) fn execute<P>(name: &str, dir: Option<P>) -> Result<String>
+pub(crate) fn execute<P>(name: &str, dir: Option<P>) -> Result<Option<String>>
 where
     P: AsRef<Path>,
 {
-    if name.contains('-') {
-        anyhow::bail!("Contract names cannot contain hyphens");
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        anyhow::bail!("Contract names can only contain alphanumeric characters and underscores");
+    }
+
+    if !name
+        .chars()
+        .next()
+        .map(|c| c.is_alphabetic())
+        .unwrap_or(false)
+    {
+        anyhow::bail!("Contract names must begin with an alphabetic character");
     }
 
     let out_dir = dir
@@ -57,7 +66,7 @@ where
         let contents = contents.replace("{{name}}", name);
         let contents = contents.replace("{{camel_name}}", &name.to_camel_case());
 
-        let outpath = out_dir.join(file.sanitized_name());
+        let outpath = out_dir.join(file.name());
 
         if (&*file.name()).ends_with('/') {
             fs::create_dir_all(&outpath)?;
@@ -73,10 +82,7 @@ where
                 .open(outpath.clone())
                 .map_err(|e| {
                     if e.kind() == std::io::ErrorKind::AlreadyExists {
-                        anyhow::anyhow!(
-                            "New contract file {} already exists",
-                            file.sanitized_name().display()
-                        )
+                        anyhow::anyhow!("New contract file {} already exists", file.name())
                     } else {
                         anyhow::anyhow!(e)
                     }
@@ -96,21 +102,48 @@ where
         }
     }
 
-    Ok(format!("Created contract {}", name))
+    Ok(Some(format!("Created contract {}", name)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{cmd, util::tests::with_tmp_dir};
+    use crate::util::tests::{with_new_contract_project, with_tmp_dir};
 
     #[test]
     fn rejects_hyphenated_name() {
-        with_tmp_dir(|path| {
-            let result = cmd::new::execute("rejects-hyphenated-name", Some(path));
+        with_new_contract_project(|manifest_path| {
+            let result = execute("rejects-hyphenated-name", Some(manifest_path));
+            assert!(result.is_err(), "Should fail");
             assert_eq!(
-                format!("{:?}", result),
-                r#"Err(Contract names cannot contain hyphens)"#
+                result.err().unwrap().to_string(),
+                "Contract names can only contain alphanumeric characters and underscores"
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn rejects_name_with_period() {
+        with_new_contract_project(|manifest_path| {
+            let result = execute("../xxx", Some(manifest_path));
+            assert!(result.is_err(), "Should fail");
+            assert_eq!(
+                result.err().unwrap().to_string(),
+                "Contract names can only contain alphanumeric characters and underscores"
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn rejects_name_beginning_with_number() {
+        with_new_contract_project(|manifest_path| {
+            let result = execute("1xxx", Some(manifest_path));
+            assert!(result.is_err(), "Should fail");
+            assert_eq!(
+                result.err().unwrap().to_string(),
+                "Contract names must begin with an alphabetic character"
             );
             Ok(())
         })
@@ -121,7 +154,7 @@ mod tests {
         with_tmp_dir(|path| {
             let name = "test_contract_cargo_project_already_exists";
             let _ = execute(name, Some(path));
-            let result = cmd::new::execute(name, Some(path));
+            let result = execute(name, Some(path));
 
             assert!(result.is_err(), "Should fail");
             assert_eq!(
@@ -139,7 +172,7 @@ mod tests {
             let dir = path.join(name);
             fs::create_dir_all(&dir).unwrap();
             fs::File::create(dir.join(".gitignore")).unwrap();
-            let result = cmd::new::execute(name, Some(path));
+            let result = execute(name, Some(path));
 
             assert!(result.is_err(), "Should fail");
             assert_eq!(
