@@ -96,6 +96,7 @@ fn build_cargo_project_compose(
     );
 
     let verbosity = verbosity.map(|v| match v {
+        Verbosity::Default => xargo_lib::Verbosity::Verbose,
         Verbosity::Verbose => xargo_lib::Verbosity::Verbose,
         Verbosity::Quiet => xargo_lib::Verbosity::Quiet,
     });
@@ -111,7 +112,7 @@ fn build_cargo_project_compose(
             "--release",
             &format!(
                 "--target-dir={}",
-                get_compose_target_dest(current_compose_name, target_dir.to_path_buf())
+                get_compose_target_dest(current_compose_name, target_dir.into())
                     .to_string_lossy()
             ),
         ];
@@ -120,7 +121,7 @@ fn build_cargo_project_compose(
             .context("Creating xargo args")?;
 
         let config = xargo_lib::Config {
-            sysroot_path: target_dir.join("sysroot"),
+            sysroot_path: target_dir.join("sysroot").into(),
             memcpy: false,
             panic_immediate_abort: true,
         };
@@ -412,7 +413,7 @@ fn compile_wat_to_wasm(
 /// Reads contract file (lib.rs) as a text.
 fn read_contracts_file_as_text(crate_metadata: &CrateMetadata) -> String {
     let target_dir = &crate_metadata.cargo_meta.target_directory;
-    let mut composable_contract_source_path: PathBuf = target_dir.to_path_buf();
+    let mut composable_contract_source_path: PathBuf = target_dir.into();
     composable_contract_source_path.pop();
     composable_contract_source_path.push("lib");
     composable_contract_source_path.set_extension("rs");

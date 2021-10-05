@@ -14,15 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with cargo-contract.  If not, see <http://www.gnu.org/licenses/>.
 
-<<<<<<< HEAD
-use anyhow::Result;
-use subxt::{
-    balances::Balances, contracts::*, system::System, ClientBuilder, ContractsTemplateRuntime,
-};
-=======
 use anyhow::{Context, Result};
-use subxt::{balances::Balances, contracts::*, system::System, ClientBuilder, DefaultNodeRuntime};
->>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
+use subxt::{balances::Balances, contracts::*, system::System, ClientBuilder, DefaultNodeRuntime, ContractsTemplateRuntime};
 
 use crate::{ExtrinsicOpts, HexData};
 
