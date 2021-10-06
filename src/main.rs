@@ -31,7 +31,7 @@ use sp_core::{
 };
 
 use std::{
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     fmt::{Display, Formatter, Result as DisplayResult},
     path::PathBuf,
     str::FromStr,
@@ -198,6 +198,19 @@ impl Verbosity {
         match self {
             Verbosity::Quiet => false,
             Verbosity::Default | Verbosity::Verbose => true,
+        }
+    }
+}
+
+impl TryFrom<&VerbosityFlags> for Option<Verbosity> {
+    type Error = Error;
+
+    fn try_from(value: &VerbosityFlags) -> Result<Self, Self::Error> {
+        match (value.quiet, value.verbose) {
+            (false, false) => Ok(Some(Verbosity::Default)),
+            (true, false) => Ok(Some(Verbosity::Quiet)),
+            (false, true) => Ok(Some(Verbosity::Verbose)),
+            (true, true) => anyhow::bail!("Cannot pass both --quiet and --verbose flags"),
         }
     }
 }
@@ -452,13 +465,7 @@ enum Command {
     },
     /// Compiles the contract, generates metadata, bundles both together in a `<name>.contract` file
     #[structopt(name = "build")]
-<<<<<<< HEAD
-    Build {
-        #[structopt(flatten)]
-        verbosity: VerbosityFlags,
-        #[structopt(flatten)]
-        unstable_options: UnstableOptions,
-    },
+    Build(BuildCommand),
     /// Compiles all of the composable smart contracts described in the schedule
     #[structopt(name = "composable-build")]
     ComposableBuild {
@@ -469,18 +476,15 @@ enum Command {
     },
     /// Generate contract metadata artifacts
     #[structopt(name = "generate-metadata")]
-    GenerateMetadata {
+    GenerateMetadata {},/*
         #[structopt(flatten)]
         verbosity: VerbosityFlags,
         #[structopt(flatten)]
         unstable_options: UnstableOptions,
-    },
-=======
-    Build(BuildCommand),
+    },*/
     /// Check that the code builds as Wasm; does not output any `<name>.contract` artifact to the `target/` directory
     #[structopt(name = "check")]
     Check(CheckCommand),
->>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
     /// Test the smart contract off-chain
     #[structopt(name = "test")]
     Test(TestCommand),
@@ -644,36 +648,6 @@ fn exec(cmd: Command) -> Result<Option<String>> {
                 Ok(None)
             }
         }
-<<<<<<< HEAD
-        Command::ComposableBuild {
-            verbosity,
-            unstable_options,
-        } => {
-            let manifest_path = Default::default();
-            let dest_wasm = cmd::composable_build::execute(
-                &manifest_path,
-                verbosity.try_into()?,
-                unstable_options.try_into()?,
-            )?;
-            Ok(format!(
-                "\nYour composable contract(s) is/are ready. You can find it the following directory:\n{}",
-                dest_wasm.display().to_string().bold()
-            ))
-        }
-        Command::GenerateMetadata {
-            verbosity,
-            unstable_options,
-        } => {
-            let metadata_file = cmd::metadata::execute(
-                Default::default(),
-                verbosity.try_into()?,
-                unstable_options.try_into()?,
-            )?;
-            Ok(format!(
-                "Your metadata file is ready.\nYou can find it here:\n{}",
-                metadata_file.display()
-            ))
-=======
         Command::Check(check) => {
             let res = check.exec()?;
             assert!(
@@ -695,8 +669,25 @@ fn exec(cmd: Command) -> Result<Option<String>> {
             } else {
                 Ok(None)
             }
->>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
         }
+        Command::ComposableBuild {
+            verbosity,
+            unstable_options,
+        } => {
+            let manifest_path = Default::default();
+            let dest_wasm = cmd::composable_build::execute(
+                &manifest_path,
+                verbosity.try_into()?,
+                unstable_options.try_into()?,
+            )?;
+            Ok(Some(format!(
+                "\nYour composable contract(s) is/are ready. You can find it the following directory:\n{:?}",
+                dest_wasm.display().to_string().bold()
+            )))
+        }
+        Command::GenerateMetadata {} => Err(anyhow::anyhow!(
+            "Command deprecated, use `cargo contract build` instead"
+        )),
         #[cfg(feature = "extrinsics")]
         Command::Deploy {
             extrinsic_opts,
@@ -739,10 +730,10 @@ fn exec(cmd: Command) -> Result<Option<String>> {
                             code_hash
                         );
                     }
-                    Ok(format!(
+                    Ok(Some(format!(
                         "All components successfully deployed for {:?}",
                         suri
-                    ))
+                    )))
                 }
                 None => Err(anyhow::anyhow!(
                     "Nothing to deploy. Empty deploy key of composable metadata."
@@ -796,7 +787,7 @@ fn exec(cmd: Command) -> Result<Option<String>> {
                 data.clone(),
             )?;
 
-            Ok(format!("CallRuntimeGateway result: {:?}", res))
+            Ok(Some(format!("CallRuntimeGateway result: {:?}", res)))
         }
         #[cfg(feature = "extrinsics")]
         Command::CallContractsGateway {
@@ -836,7 +827,7 @@ fn exec(cmd: Command) -> Result<Option<String>> {
                 data.clone(),
             )?;
 
-            Ok(format!("CallRuntimeGateway result: {:?}", res))
+            Ok(Some(format!("CallRuntimeGateway result: {:?}", res)))
         }
         #[cfg(feature = "extrinsics")]
         Command::CallContract {
@@ -854,7 +845,7 @@ fn exec(cmd: Command) -> Result<Option<String>> {
                 data.clone(),
             )?;
 
-            Ok(format!("Call regular contract result: {:?}", res))
+            Ok(Some(format!("Call regular contract result: {:?}", res)))
         }
     }
 }

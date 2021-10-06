@@ -255,12 +255,7 @@ fn exec_cargo_for_wasm_target(
         } else {
             args.push("-Zbuild-std-features=panic_immediate_abort");
         }
-<<<<<<< HEAD
-
-        println!("exit_status {:?}", exit_status);
-=======
         util::invoke_cargo(command, &args, manifest_path.directory(), verbosity)?;
->>>>>>> 8e86572b4b4ed2442de131c8e3506dee219fb0b7
 
         Ok(())
     };
